@@ -13,9 +13,10 @@
     Zhiying Du<sup></sup>,</span>
     Shuyuan Tu<sup></sup>,</span>
     Haidong Cao<sup></sup>,</span>
-    Jiaqi Leng<sup></sup>,</span>
+    Jiaqi Leng<sup></sup>,<br/>
+    </span>
     <a href="https://zxwu.azurewebsites.net/" target="_blank">Zuxuan Wu</a><sup>&dagger;</sup>,</span>
-    Yu-Gang Jiang<sup></sup>,</span>
+    Yu-Gang Jiang<sup></sup></span>
 </div>
 
 <div>
