@@ -21,7 +21,7 @@
 <div>
     <sup>&dagger;</sup> Corresponding author&emsp;
 </div>
-
+</div>
 
 ## Method
 [![Method overview](assets/method.jpg)](assets/method.jpg)
