@@ -1,5 +1,6 @@
 from PIL import Image
 import cv2
+import os
 import time
 
 
@@ -51,14 +52,16 @@ class CoarseInit:
         
         return self._intrinsic
 
-    def get_extrinsic(self, video, joint_angles, img_idx = 0, method=cv2.SOLVEPNP_EPNP):
+    def get_extrinsic(self, video, joint_angles, img_idx = 0, method=cv2.SOLVEPNP_EPNP, save_path = None):
         img_pil = Image.fromarray(video[img_idx])
 
         u, v = self.recognizer.get_uv(target_img_pil=img_pil)
         points_2d, pred_tracks, pred_visibility = self.point_tracker.track(video=video, uv=(u,v), img_idx=img_idx)
+        
+        if save_path is not None:
+            self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
 
         K = self._get_intrinsic(img_pil)
-        print(f"K: {K}")
         points_3d = self.robot_tf.fkine(joint_angles)[:,:3,3]
         extrinsic = self.pnp_solver(points_3d=points_3d, points_2d=points_2d, camera_matrix=K, method=method)
         return extrinsic, K

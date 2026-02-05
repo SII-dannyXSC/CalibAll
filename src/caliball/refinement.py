@@ -50,7 +50,7 @@ class Refinement:
 
         return result, loss_dict
 
-    def refine(self, video, joint_angles, intrinsic, extrinsic, max_steps=3000):
+    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, max_steps=3000):
         H, W = video.shape[1:3]
         device = "cuda"
         solver = RBSolver(self.mesh_paths, H, W, extrinsic, device = device)
@@ -74,7 +74,6 @@ class Refinement:
             weight_decay=1e-6,
         )
 
-        base_path = f"./results/{time.time()}"
         os.makedirs(base_path, exist_ok=True)
         for k in range(max_steps):
             output, loss_dict = solver.forward(dps)
@@ -86,17 +85,26 @@ class Refinement:
                 print(k, loss)
                 tsfm = output["tsfm"]
                 loss = loss.detach().cpu()
+                
                 save_path = os.path.join(base_path,f"{k}")
+                pred_mask_path = os.path.join(base_path,f"pred_mask")
                 os.makedirs(save_path, exist_ok=True)
+                os.makedirs(pred_mask_path, exist_ok=True)
                 with open(os.path.join(save_path, 'loss.txt'),'w')as f:
                     f.write(str(loss))
                 with open(os.path.join(save_path, 'tsfm.txt'),'w')as f:
                     f.write(str(tsfm))
-                                
+
                 idx=0
                 cur_rgb = video[0][:, :, ::-1]
-                render_pre = output["rendered_masks"][idx].detach().cpu()
+                img = Image.fromarray(video[0])
+                img.save(os.path.join(base_path, f'origin.png'))
                 
+                render_pre = output["rendered_masks"][idx].detach().cpu()
+                render_gt = mask.detach().cpu()[0].float()
+                
+                save_img(render_gt,path = os.path.join(save_path, f'mask_{idx}_gt.png'))
+                save_img(render_gt,path = os.path.join(base_path, f'mask_gt.png'))
                 save_img(render_pre,path = os.path.join(save_path, f'mask_{idx}_pred.png'))
 
                 # 生成彩色版本的 mask（红色叠加）
@@ -106,6 +114,7 @@ class Refinement:
                 mask_render = (mask_render > 0).astype(np.uint8)
                 overlay = add_mask(cur_rgb, mask_render, color=color, alpha=0.5)
                 cv2.imwrite(os.path.join(save_path, f'output_with_mask_{idx}.png'), overlay)
+                cv2.imwrite(os.path.join(pred_mask_path, f'{k}.png'), overlay)
         return output, loss_dict     
                         
 

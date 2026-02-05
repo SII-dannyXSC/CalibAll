@@ -22,10 +22,14 @@ class Tracker:
         self.cotracker.to(device)
         return self
 
-    def track(self, video, uv, img_idx=0):
+    def preprocess_video(self, video):
         video = torch.tensor(video).to(device = self.device, dtype=torch.float32)
         video = video.permute(0, 3, 1, 2) # T C H W 
         video = video.unsqueeze(0)        # B T C H W
+        return video
+
+    def track(self, video, uv, img_idx=0):
+        video = self.preprocess_video(video)
         
         u,v = uv
         queries = [[img_idx, u, v]]
@@ -37,10 +41,16 @@ class Tracker:
         points_2d = points_2d.detach().cpu().numpy()
         points_2d = points_2d[0]    # only one query here
         
-        vis = Visualizer(save_dir=".", pad_value = 100)
-        vis.visualize(video=video,tracks=pred_tracks,visibility=pred_visibility,filename=f"point_tracking_{time.time()}")
+        # vis = Visualizer(save_dir=".", pad_value = 100)
+        # vis.visualize(video=video,tracks=pred_tracks,visibility=pred_visibility,filename=f"point_tracking_{time.time()}")
 
         return points_2d, pred_tracks, pred_visibility
+    
+    def visualize(self, video, pred_tracks, pred_visibility, path, pad_value=100):
+        video = self.preprocess_video(video)
+        vis = Visualizer(save_dir=".", pad_value = pad_value)
+        vis.visualize(video=video,tracks=pred_tracks,visibility=pred_visibility, filename=path)
+
     
 def build_tracker(config, device=None):
     tracker = Tracker(repo_dir=config.tracker_repo_dir, model_id=config.tracker_id, local_ckpt_path=config.tracker_ckpt_path, device=device)
