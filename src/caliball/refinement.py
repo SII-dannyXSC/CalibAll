@@ -4,12 +4,13 @@ import numpy as np
 import os
 import time 
 from PIL import Image
-from caliball.utils.image import save_imgs, save_img
-from caliball.pipeline.rendering_optimizer import RBSolver
-from caliball.robot import build_robot
-from caliball.config import build_robot_config
-from caliball.utils.image import add_mask
-from caliball.utils.sam3_extractor import Sam3Extractor
+
+from src.caliball.utils.image import save_imgs, save_img
+from src.caliball.pipeline.rendering_optimizer import RBSolver
+from src.caliball.robot import build_robot
+from src.caliball.config import build_robot_config
+from src.caliball.utils.image import add_mask
+from src.caliball.utils.sam3_extractor import Sam3Extractor
 
 class Refinement:
     def __init__(self, config):

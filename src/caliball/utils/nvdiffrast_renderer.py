@@ -4,7 +4,7 @@ import torch
 import nvdiffrast.torch as dr
 import trimesh
 
-from caliball.utils.nvdiffrast_utils import K_to_projection, transform_pos
+from src.caliball.utils.nvdiffrast_utils import K_to_projection, transform_pos
 
 
 class NVDiffrastRenderer:

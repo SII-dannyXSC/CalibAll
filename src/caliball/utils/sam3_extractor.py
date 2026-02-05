@@ -9,7 +9,7 @@ from matplotlib.colors import to_rgb
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
-from caliball.utils.image import save_mask_as_image, save_image_with_mask
+from src.caliball.utils.image import save_mask_as_image, save_image_with_mask
 
 class Sam3Extractor:
     def __init__(self, bpe_path, ckpt_path):

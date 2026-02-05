@@ -37,13 +37,9 @@
 conda create -n caliball python=3.12
 ```
 
-python 12 torch 2.9 cuda128
-
-
 ```
 pip install git+https://github.com/huggingface/lerobot.git@0cf864870cf29f4738d3ade893e6fd13fbd7cdb5
 ```
-
 
 ```
 pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128
@@ -72,7 +68,7 @@ pip install -e .
 
 ```
 cd third_party
-https://github.com/Daniella1/urdf_files_dataset.git
+git clone https://github.com/Daniella1/urdf_files_dataset.git
 ```
 
 ```
@@ -85,6 +81,11 @@ pip install git+https://github.com/microsoft/MoGe.git
 ```
 
 ```
+cd third_party
+git clone https://github.com/facebookresearch/dinov2
+```
+
+```
 roboticstoolbox-python
 opencv-python
 tensorflow
@@ -93,8 +94,10 @@ loguru
 multipledispatch
 omegaconf
 debugpy
+pycocotools
 pycollada
 imageio[ffmpeg]
+decord
 numpy==1.26.4
 ```
 

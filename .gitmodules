@@ -1,0 +1,12 @@
+[submodule "third_party/dinov2"]
+	path = third_party/dinov2
+	url = https://github.com/facebookresearch/dinov2
+[submodule "third_party/co-tracker"]
+	path = third_party/co-tracker
+	url = https://github.com/facebookresearch/co-tracker
+[submodule "third_party/sam3"]
+	path = third_party/sam3
+	url = https://github.com/facebookresearch/sam3
+[submodule "third_party/urdf_files_dataset"]
+	path = third_party/urdf_files_dataset
+	url = https://github.com/Daniella1/urdf_files_dataset
