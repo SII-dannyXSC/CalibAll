@@ -1,15 +1,19 @@
+import sys 
+import os
+sys.path.append(os.getcwd())
+
 from PIL import Image
 
-from caliball.coarse_init import CoarseInit
-from caliball.dataset.droid import DroidDataset
-from caliball.dataset.lerobot_dataset import LeRobotDataset
-from caliball.refinement import Refinement
+from src.caliball.coarse_init import CoarseInit
+from src.caliball.dataset.droid import DroidDataset
+from src.caliball.dataset.lerobot_dataset import LeRobotDataset
+from src.caliball.refinement import Refinement
 import debugpy
 # debugpy.listen(("0.0.0.0", 10092))
 # print("🔍 Waiting for VSCode attach on 0.0.0.0:10092 ...")
 # debugpy.wait_for_client()
 
-img_pil = Image.open("data/test_img/robot/ep_0_frame_100_origin.png").convert("RGB")
+img_pil = Image.open("assets/test_img/source.png").convert("RGB")
 p = (376, 131)
 
 config = type('', (), {})()  # create empty config object  
@@ -22,9 +26,9 @@ config.tracker_ckpt_path = "ckpt/cotracker/scaled_offline.pth"
 config.bpe_path = "third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz"
 config.ckpt_path = "ckpt/sam3/sam3.pt"
 
-# dataset = DroidDataset("/cpfs02/user/xiesicheng.xsc/CalibAll/data",split="train[:10]")
+dataset = DroidDataset("/inspire/hdd/global_user/xiesicheng-253108120120/data/droid_example", name="droid_100",split="train[:10]")
 # dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
-dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
+# dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
 corase_init_pipe = CoarseInit(config=config)
 corase_init_pipe.to("cuda")
 corase_init_pipe._init_recognizer(img_pil, p)

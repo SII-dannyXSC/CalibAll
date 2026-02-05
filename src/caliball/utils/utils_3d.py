@@ -5,7 +5,7 @@ import pytorch3d.transforms
 import torch
 from multipledispatch import dispatch
 
-from caliball.utils.pn_utils import to_array
+from src.caliball.utils.pn_utils import to_array
 
 
 @dispatch(np.ndarray, np.ndarray)

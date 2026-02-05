@@ -3,12 +3,12 @@ import cv2
 import time
 
 
-from caliball.utils.feature_extractor import build_feature_extractor
-from caliball.pipeline.recognition import Recognizer
-from caliball.pipeline.point_tracker import build_tracker
-from caliball.pipeline.temporal_pnp import solve_pnp
-from caliball.utils.intrinsic_estimator import build_intrinsic_estimator
-from caliball.robot import build_robot
+from src.caliball.utils.feature_extractor import build_feature_extractor
+from src.caliball.pipeline.recognition import Recognizer
+from src.caliball.pipeline.point_tracker import build_tracker
+from src.caliball.pipeline.temporal_pnp import solve_pnp
+from src.caliball.utils.intrinsic_estimator import build_intrinsic_estimator
+from src.caliball.robot import build_robot
 
 class CoarseInit:
     def __init__(self, config):

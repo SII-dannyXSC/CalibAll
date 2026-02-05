@@ -1,0 +1,12 @@
+roboticstoolbox-python
+opencv-python
+tensorflow
+tensorflow-datasets
+loguru
+multipledispatch
+omegaconf
+debugpy
+decord
+pycollada
+imageio[ffmpeg]
+numpy==1.26.4

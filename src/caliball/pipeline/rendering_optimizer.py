@@ -25,9 +25,9 @@ import torch
 from torch import device, dtype, Tensor
 from torch._prims_common import DeviceLikeType
 
-from caliball.utils.nvdiffrast_renderer import NVDiffrastRenderer
-from caliball.utils import utils_3d
-from caliball.utils.utils_3d import se3_log_map, se3_exp_map
+from src.caliball.utils.nvdiffrast_renderer import NVDiffrastRenderer
+from src.caliball.utils import utils_3d
+from src.caliball.utils.utils_3d import se3_log_map, se3_exp_map
 
 class RBSolver(nn.Module):
     def __init__(self, mesh_paths, H, W, init_Tc_c2b, device = "cuda"):

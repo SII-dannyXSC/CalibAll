@@ -1,7 +1,7 @@
 import numpy as np
 import roboticstoolbox as rtb
 
-from caliball.robot.base import BaseTF
+from src.caliball.robot.base import BaseTF
 class FrankaTF(BaseTF):
     JOINT_NUM = 7
     def __init__(self):

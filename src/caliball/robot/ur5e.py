@@ -1,8 +1,8 @@
 import numpy as np
 import roboticstoolbox as rtb
 from scipy.spatial.transform import Rotation as R
-from caliball.robot.rtb import RoboticsToolBoxTF
-from caliball.robot.urdf.ur5e import Ur5e
+from src.caliball.robot.rtb import RoboticsToolBoxTF
+from src.caliball.robot.urdf.ur5e import Ur5e
 
 class Ur5eTF(RoboticsToolBoxTF):
     def __init__(self, name_list, eef_name):

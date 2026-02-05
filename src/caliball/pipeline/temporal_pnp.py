@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-from caliball.pipeline.point_tracker import Tracker
+from src.caliball.pipeline.point_tracker import Tracker
 
 def solve_pnp(points_3d, points_2d, camera_matrix, method=cv2.SOLVEPNP_ITERATIVE):
     dist_coeffs = np.zeros(shape=[8, 1], dtype='float64')
