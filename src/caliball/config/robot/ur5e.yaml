@@ -1,0 +1,19 @@
+names:
+  - base_link
+  - shoulder_link
+  - upper_arm_link
+  - forearm_link
+  - wrist_1_link
+  - wrist_2_link
+  - wrist_3_link
+
+eef_name: wrist_3_link
+
+mesh_paths:
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/base.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/shoulder.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/upperarm.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/forearm.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/wrist1.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/wrist2.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots/ur_description/meshes/ur5e/visual/wrist3.dae
