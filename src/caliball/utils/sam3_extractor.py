@@ -30,10 +30,6 @@ class Sam3Extractor:
         masks, boxes, scores = output["masks"], output["boxes"], output["scores"]
         
         if len(masks) > 0:
-            save_mask_as_image(masks[0], color="r", save_path="robot_mask.png")
-            save_image_with_mask(img_pil, masks[0], color="r", alpha=0.5, save_path="robot_with_mask.png")
-        
-        if len(masks) > 0:
             best_mask = masks[0]
             return best_mask
         else:

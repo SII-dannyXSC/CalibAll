@@ -1,7 +1,6 @@
-import sys 
-import os
-sys.path.append(os.getcwd())
 
+import time
+import os
 from PIL import Image
 
 from src.caliball.coarse_init import CoarseInit
@@ -52,11 +51,15 @@ for data in dataset:
     video = video[length//2:]
     joint_angles = joint_angles[length//2:]
 
-    extrinsic, intrinsic = corase_init_pipe.get_extrinsic(video=video, joint_angles=joint_angles, img_idx=0)
+    save_path = f"results/{time.time()}_{cnt}"
+    os.makedirs(save_path, exist_ok=True)
+
+
+    extrinsic, intrinsic = corase_init_pipe.get_extrinsic(video=video, joint_angles=joint_angles, img_idx=0, save_path=save_path)
     print(f"{extrinsic=}")
+    print(f"{intrinsic=}")
     
-    # result, loss_dict = refinement_pipe.render(video=video, joint_angles=joint_angles, intrinsic=intrinsic, extrinsic=extrinsic)
-    result, loss_dict = refinement_pipe.refine(video=video, joint_angles=joint_angles, intrinsic=intrinsic, extrinsic=extrinsic)
+    result, loss_dict = refinement_pipe.refine(video=video, joint_angles=joint_angles, intrinsic=intrinsic, extrinsic=extrinsic, base_path=save_path)
 
     cnt += 1
     if cnt > 10:
