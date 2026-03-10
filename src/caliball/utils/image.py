@@ -46,7 +46,7 @@ def add_mask(cur_rgb, cur_mask, color = [220, 172, 47], alpha = 0.7):    #np.arr
 
     color_layer = np.zeros_like(cur_rgb, dtype=np.uint8) 
     # 只在 Mask 区域填充颜色
-    color_layer[mask_indices] = overlay_color_rgb[mask_indices]
+    color_layer[mask_indices] = overlay_color_rgb
 
     # --- 步骤 3: 执行加权平均叠加 (Alpha Blending) ---
     # alpha = 0.7 # 透明度 (0.0 - 1.0)

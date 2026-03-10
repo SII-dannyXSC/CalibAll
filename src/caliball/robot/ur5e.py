@@ -43,7 +43,7 @@ class Ur5eTF(RoboticsToolBoxTF):
 
 if __name__=="__main__":
     from omegaconf import OmegaConf
-    cfg = OmegaConf.load("./caliball/config/robot/ur5e.yaml")
+    cfg = OmegaConf.load("./src/caliball/config/robot/ur5e.yaml")
     robot = Ur5eTF(cfg.names, cfg.eef_name)
     import pdb;pdb.set_trace()
     input()
