@@ -6,7 +6,7 @@ class Ur5e(Robot):
     def __init__(self):
         
         links, name, urdf_string, urdf_filepath = self.URDF_read(file_path="ur_description/urdf/ur5e.urdf",
-                       tld="./assets/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots")
+                       tld="./third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/universal_robots")
         super().__init__(
             links,
             name=name,

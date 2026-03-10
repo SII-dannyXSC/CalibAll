@@ -16,8 +16,8 @@ class Refinement:
     def __init__(self, config):
         self.config = config
 
-        self.robot_tf = build_robot()
-        self.robot_config = build_robot_config()
+        self.robot_config = build_robot_config(config)
+        self.robot_tf = build_robot(config, self.robot_config)
         self.mesh_paths = self.robot_config.mesh_paths
 
         self.sam3_extractor = Sam3Extractor(bpe_path=config.bpe_path, ckpt_path=config.ckpt_path)
@@ -108,8 +108,8 @@ class Refinement:
                 save_img(render_pre,path = os.path.join(save_path, f'mask_{idx}_pred.png'))
 
                 # 生成彩色版本的 mask（红色叠加）
-                color = np.zeros_like(cur_rgb)
-                color[:, :, 2] = 255  # r
+                # color = np.zeros_like(cur_rgb)
+                color = [0, 255, 0]  # r
                 mask_render = render_pre.numpy().astype(np.uint8)
                 mask_render = (mask_render > 0).astype(np.uint8)
                 overlay = add_mask(cur_rgb, mask_render, color=color, alpha=0.5)

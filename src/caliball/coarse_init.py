@@ -10,6 +10,7 @@ from src.caliball.pipeline.point_tracker import build_tracker
 from src.caliball.pipeline.temporal_pnp import solve_pnp
 from src.caliball.utils.intrinsic_estimator import build_intrinsic_estimator
 from src.caliball.robot import build_robot
+from src.caliball.config import build_robot_config
 
 class CoarseInit:
     def __init__(self, config):
@@ -19,7 +20,8 @@ class CoarseInit:
         self.recognizer = Recognizer(feature_extractor)
         self.point_tracker = build_tracker(config)
         self.pnp_solver = solve_pnp
-        self.robot_tf = build_robot()
+        self.robot_config = build_robot_config(config)
+        self.robot_tf = build_robot(config, self.robot_config)
         
         self._intrinsic = None
         self.intrinsic_estimator = None
