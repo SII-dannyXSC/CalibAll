@@ -47,5 +47,5 @@ class DINOv2Featurizer:
         return out
 
 def build_feature_extractor(config):
-    return DINOv2Featurizer(local_ckpt_path=config.ckpt_path, repo_dir=config.repo_dir, model_id=config.dino_id)
+    return DINOv2Featurizer(local_ckpt_path=config.dinov2_ckpt_path, repo_dir=config.repo_dir, model_id=config.dino_id)
     # return DINOv2Featurizer()

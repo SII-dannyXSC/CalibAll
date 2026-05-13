@@ -67,6 +67,7 @@ class RBSolver(nn.Module):
             all_link_co = []
             for link_idx in range(self.nlinks):
                 Tc_c2l = Tc_c2b @ link_poses[bid, link_idx]
+                Tc_c2l = Tc_c2l.to(dtype=torch.float32)
                 verts, faces = getattr(self, f"vertices_{link_idx}"), getattr(self, f"faces_{link_idx}")
                 si = self.renderer.render_mask(verts, faces, K=K, object_pose=Tc_c2l)
                 if color:

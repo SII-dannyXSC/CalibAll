@@ -1,0 +1,24 @@
+# Robotiq 2F-85 夹爪组件（ur5e_robotiq / franka_robotiq 共享）
+names:
+  - robotiq_arg2f_base_link
+  - left_outer_knuckle
+  - left_outer_finger
+  - left_inner_finger
+  - left_inner_knuckle
+  - right_outer_knuckle
+  - right_outer_finger
+  - right_inner_finger
+  - right_inner_knuckle
+
+eef_name: left_inner_finger
+
+mesh_paths:
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_base_link.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
+  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae

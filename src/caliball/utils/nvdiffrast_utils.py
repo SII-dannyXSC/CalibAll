@@ -13,6 +13,11 @@ def K_to_projection(K, H, W, n=0.001, f=10.0, device = "cuda"):
 
 def transform_pos(mtx, pos, device = "cuda"):
     t_mtx = torch.from_numpy(mtx).to(device=device) if isinstance(mtx, np.ndarray) else mtx
+    t_mtx = t_mtx.to(device=device, dtype=torch.float32).contiguous()
+    pos = pos.to(device=device, dtype=torch.float32).contiguous()
     # (x,y,z) -> (x,y,z,1)
-    posw = torch.cat([pos, torch.ones([pos.shape[0], 1]).to(device=device)], axis=1)
+    posw = torch.cat(
+        [pos, torch.ones((pos.shape[0], 1), device=device, dtype=torch.float32)],
+        axis=1,
+    )
     return torch.matmul(posw, t_mtx.t())[None, ...]

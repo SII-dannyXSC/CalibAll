@@ -1,0 +1,40 @@
+defaults:
+  - robot: franka_robotiq      # Franka Panda + Robotiq 2F-85（DROID 标准配置）
+  - models        # 公共模型权重（dinov2 / cotracker / sam3）
+  - _self_
+
+dataset_name: droid_1.0.1
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state
+  action_key: action
+  state_fn:
+    _target_: src.caliball.dataset.calib_lerobot_dataset.StateProcessor
+    arm_joint_stop: 7          # observation.state[:7] = 7 臂关节角
+    # arm_joint_step 默认 1（非交错格式，无需设置）
+    gripper_mode: from_state_idx
+    gripper_state_idx: 7       # observation.state[7] = 夹爪状态（0=开, 1=闭）
+    gripper_open_val: 0.0
+    gripper_closed_val: 0.8
+    gripper_threshold: 0.5
+
+tf:
+  _target_: src.caliball.robot.composite.franka_robotiq.FrankaRobotiqTF
+  arm_names: ${robot.arm.names}
+  gripper_names: ${robot.gripper.names}
+  arm_eef_name: ${robot.arm.eef_name}
+  gripper_eef_name: ${robot.gripper.eef_name}
+  gripper_mount_yaw_deg: 0.0
+
+# scripts/label_from_config.py 读取；命令行可覆盖
+label:
+  output_dir: ./label_out/${dataset_name}
+  calib_dataset_name: ${dataset_name}
+  camera_names:
+    - observation.images.exterior_image_1_left
+    - observation.images.exterior_image_2_left
+    # - observation.images.wrist_image_left
+  eef_rotation_type: axis_angle_residual

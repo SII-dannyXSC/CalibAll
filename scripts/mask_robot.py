@@ -50,10 +50,19 @@ dataset = BerkeleyUr5Dataset(
 #         [-0.3821,  0.8586, -0.3417,  1.1462],
 #         [ 0.0000,  0.0000,  0.0000,  1.0000]]).to(device=device)
 
-Tc_c2b = torch.tensor([[ 0.6316,  0.7753,  0.0072,  0.3458],
-        [ 0.4637, -0.3703, -0.8049,  0.1804],
-        [-0.6213,  0.5117, -0.5934,  0.4648],
-        [ 0.0000,  0.0000,  0.0000,  1.0000]]).to(device=device)
+INTRINSIC = np.array([
+    [466.6021,    0.0,   320.0],
+    [  0.0,   466.60208, 240.0],
+    [  0.0,     0.0,     1.0]
+])
+EXTRINSIC = np.array([
+    [ 0.0548, -0.9980, -0.0303,  0.0049],
+    [ 0.0488,  0.0329, -0.9983,  0.8536],
+    [ 0.9973,  0.0532,  0.0505, -0.2315],
+    [ 0.0000,  0.0000,  0.0000,  1.0000]
+])
+
+Tc_c2b = torch.tensor(EXTRINSIC).to(device=device)
 
 intrinsic_estimator = build_intrinsic_estimator()
 
@@ -84,7 +93,6 @@ for data in dataset:
     joint_angles = data["states"]  # T 6
     eef_pose = data['action']
     
-
     length = len(video)
     
     img_pil = Image.fromarray(video[0])

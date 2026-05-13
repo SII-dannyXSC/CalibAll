@@ -4,8 +4,68 @@ import numpy as np
 import pytorch3d.transforms
 import torch
 from multipledispatch import dispatch
+from scipy.spatial.transform import Rotation
 
 from src.caliball.utils.pn_utils import to_array
+
+
+def pose_to_hom_mat(pose, rot_type="euler_xyz"):
+    """将位姿 [x,y,z,r1,r2,r3] 转为 4x4 齐次矩阵。
+
+    ``axis_angle`` / ``axis_angle_residual``：后三维为旋转向量（axis-angle，与 scipy ``Rotation.from_rotvec`` 一致），
+    常用于 OXE 等数据集中「末端轴角残差」与平移残差并列的 6 维表示。
+    """
+    hom_mat = np.eye(4)
+    hom_mat[:3, 3] = pose[:3]
+    if rot_type in ("axis_angle", "axis_angle_residual", "axis-angle", "axis-angle-residual"):
+        rot = Rotation.from_rotvec(pose[3:6]).as_matrix()
+    elif rot_type == "euler_xyz":
+        rot = Rotation.from_euler("xyz", pose[3:6]).as_matrix()
+    elif rot_type == "euler_zyx":
+        rot = Rotation.from_euler("zyx", pose[3:6]).as_matrix()
+    elif rot_type == "quaternion":
+        rot = Rotation.from_quat(pose[3:7]).as_matrix()
+    elif rot_type == "rotation_matrix":
+        pose_arr = np.array(pose)
+        rot = pose_arr[:3, :3] if pose_arr.shape == (4, 4) else pose_arr[3:12].reshape(3, 3)
+    else:
+        raise ValueError(f"Invalid rotation type: {rot_type}")
+    hom_mat[:3, :3] = rot
+    return hom_mat
+
+
+def hom_mat_to_pose(hom_mat, rot_type="euler_xyz"):
+    """将 4x4 齐次矩阵转为位姿 [x,y,z,r1,r2,r3]（轴角时为旋转向量）"""
+    hom_mat = np.array(hom_mat)
+    if rot_type in ("axis_angle", "axis_angle_residual", "axis-angle", "axis-angle-residual"):
+        pos = hom_mat[:3, 3]
+        rot = Rotation.from_matrix(hom_mat[:3, :3]).as_rotvec()
+        return np.concatenate((pos, rot))
+    elif rot_type == "euler_xyz":
+        pos = hom_mat[:3, 3]
+        rot = Rotation.from_matrix(hom_mat[:3, :3]).as_euler("xyz")
+        return np.concatenate((pos, rot))
+    elif rot_type == "euler_zyx":
+        pos = hom_mat[:3, 3]
+        rot = Rotation.from_matrix(hom_mat[:3, :3]).as_euler("zyx")
+        return np.concatenate((pos, rot))
+    elif rot_type == "quaternion":
+        pos = hom_mat[:3, 3]
+        rot = Rotation.from_matrix(hom_mat[:3, :3]).as_quat()
+        return np.concatenate((pos, rot))
+    elif rot_type == "rotation_matrix":
+        return hom_mat
+    else:
+        raise ValueError(f"Invalid rotation type: {rot_type}")
+
+
+def diff_rot_mat(rot_end, rot_start):
+    """rot_end @ inv(rot_start)，用于计算旋转差分"""
+    rot_end = np.array(rot_end)
+    rot_start = np.array(rot_start)
+    if rot_end.shape != (3, 3) or rot_start.shape != (3, 3):
+        raise ValueError(f"Invalid rotation matrix shape")
+    return rot_end @ np.linalg.inv(rot_start)
 
 
 @dispatch(np.ndarray, np.ndarray)

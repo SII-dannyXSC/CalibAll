@@ -219,6 +219,20 @@ visualized_videos/
 results/
 output_videos
 .venv*
-ckpt/
-data/
 .vscode
+
+# Project-specific data and outputs
+ckpt
+data
+label_out
+manual_label
+extrinsic_detection_web
+result
+
+# Temporary and tool-specific
+tmp/
+third_party
+.claude/
+.sii/
+.claudeignore
+.cursorignore

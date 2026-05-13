@@ -1,0 +1,32 @@
+# LeRobot 格式双臂数据 + ALOHA（Agilex Cobot Magic）URDF / AlohaCobotMagicTF
+# 用法见 scripts/label_from_config_aloha.sh
+defaults:
+  - robot: arx5_robotwin
+  - _self_
+
+calib_dataset_name: rdt
+dataset_name: airpods_on_second_layer
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data/rdt_aloha_lerobot2.1
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state
+
+tf:
+  _target_: src.caliball.robot.dual_arm.arx5.Arx5RobotwinTF
+  names: ${robot.names}
+  eef_name: ${robot.eef_name}
+  grasp_point_rotation_align: [0.0, 90.0, 0.0]   # euler_xyz 角度（度），右乘到 rot_cam；[0,0,0] = 不对齐
+
+label:
+  output_dir: ./label_out/aloha/${dataset_name}
+  calib_dataset_name: ${calib_dataset_name}
+  camera_names:
+    - observation.images.main
+  eef_rotation_type: euler_xyz
+  arm_mesh_num: 7   # per-arm: base_link+link1-6 = 7 arm body, link7-8 = gripper
+  # episode_start: 0
+  # max_episodes: 10
+  # skip_mask: false
+  # device: cuda

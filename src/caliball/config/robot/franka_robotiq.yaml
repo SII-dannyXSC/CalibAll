@@ -1,0 +1,3 @@
+defaults:
+  - arm/franka_panda@arm
+  - gripper/robotiq@gripper

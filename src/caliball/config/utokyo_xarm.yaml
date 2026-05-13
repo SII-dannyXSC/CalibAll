@@ -1,0 +1,38 @@
+# UTokyo xArm Pick and Place（OXE / RLDS → LeRobot 2.1）
+#
+# ⚠️  暂不支持标注：LeRobot 2.1 转换后 observation.state 为 6D EEF 位姿，无关节角，无法 FK。
+#    原始 RLDS 有 observation.joint_state (14,) = 7关节角+7关节速度，但未导出。
+#
+# FeaturesDict 摘要：
+#   action (7,): 3×EEF 位置 + 3×yaw/pitch/roll + 1×夹爪开合
+#   observation.state (6,): EEF 位姿（非关节角）
+#   图像: image / hand_image / image2（224²）
+#
+# 相机内参见 config/camera_intrinsic_extrinsic.py → utokyo_xarm_pick_and_place_converted_externally_to_rlds
+defaults:
+  - robot: xarm7_with_gripper
+  - _self_
+
+dataset_name: utokyo_xarm_pick_and_place_converted_externally_to_rlds
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state
+  action_key: action
+  # TODO: observation.state 仅为 6D EEF 位姿，states 输出不可用于 FK 标注
+  #       需重新从原始 RLDS 导出关节角后才能启用
+
+tf:
+  _target_: src.caliball.robot.composite.xarm.XArm7WithGripperTF
+  full_chain_names: ${robot.names}
+  gripper_eef_name: ${robot.gripper.eef_name}
+  gripper_mount_yaw_deg: 0.0
+
+label:
+  output_dir: ./label_out/${dataset_name}
+  calib_dataset_name: ${dataset_name}
+  camera_names:
+    - observation.images.image
+  eef_rotation_type: euler_xyz

@@ -54,16 +54,27 @@ class CoarseInit:
         
         return self._intrinsic
 
-    def get_extrinsic(self, video, joint_angles, img_idx = 0, method=cv2.SOLVEPNP_EPNP, save_path = None):
+    def get_extrinsic(self, video, joint_angles, tracking_point=None, img_idx=0,
+                      method=cv2.SOLVEPNP_EPNP, save_path=None, init_w2c=None):
         img_pil = Image.fromarray(video[img_idx])
 
-        u, v = self.recognizer.get_uv(target_img_pil=img_pil)
+        if tracking_point is not None:
+            u, v = tracking_point
+        else:
+            u, v = self.recognizer.get_uv(target_img_pil=img_pil)
         points_2d, pred_tracks, pred_visibility = self.point_tracker.track(video=video, uv=(u,v), img_idx=img_idx)
-        
+
         if save_path is not None:
             self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
 
         K = self._get_intrinsic(img_pil)
-        points_3d = self.robot_tf.fkine(joint_angles)[:,:3,3]
-        extrinsic = self.pnp_solver(points_3d=points_3d, points_2d=points_2d, camera_matrix=K, method=method)
+        hom = self.robot_tf.fkine_eef(joint_angles)
+        if hom.ndim == 4:
+            # 双臂 (N, 2, 4, 4)：默认用左臂 TCP 与单点 2D 跟踪对齐
+            hom = hom[:, 0, ...]
+        points_3d = hom[:, :3, 3]
+        extrinsic = self.pnp_solver(
+            points_3d=points_3d, points_2d=points_2d,
+            camera_matrix=K, method=method, init_w2c=init_w2c,
+        )
         return extrinsic, K

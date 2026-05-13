@@ -2,7 +2,7 @@
 import time
 import os
 from PIL import Image
-from src.caliball.robot.franka import FrankaTF
+from src.caliball.robot.arm.franka import FrankaTF
 from omegaconf import OmegaConf
 import numpy as np
 import trimesh

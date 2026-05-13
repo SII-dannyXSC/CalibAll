@@ -1,181 +1,130 @@
+import os
+from typing import List, Optional
+
 import numpy as np
-import tensorflow as tf
-import tensorflow_datasets as tfds
-from torch.utils.data import IterableDataset
+
+from src.caliball.dataset.lerobot_dataset import LeRobotDataset
+
+# 原始 observation.state: [j0..j5, x,y,z, qx,qy,qz,qw, gripper_is_closed, action_blocked]
+_STATE_JOINT_SLICE = slice(0, 6)
+_GRIPPER_IS_CLOSED_IDX = 13
+_GRIPPER_CLOSED = 0.8  # 与 Robotiq URDF 全闭一致
+_GRIPPER_OPEN = 0.0
 
 
-class BerkeleyUr5Dataset(IterableDataset):
-    DEFAULT_LAYOUT = {
-        "qpos": slice(0,6),
-    }
+class BerkeleyUr5Dataset(LeRobotDataset):
+    """
+    Berkeley Autolab UR5（LeRobot 2.1 本地目录），默认键与 `berkeley_autolab_ur5.yaml` 一致。
+
+    提供 `repo_id` 或 `root_dir`+`name`（拼为 ``os.path.join(root_dir, name)``）。
+
+    在父类输出的 episode 上可选：`step_stride`、`max_steps` 下采样时间维。
+
+    ``states``：若最后一维为 15（原始 Berkeley 布局），则压缩为 7 维
+    ``[j0..j5, gripper]``，其中 ``gripper`` 由 ``gripper_is_closed`` 映射（1→0.8，0→0），
+    与 Robotiq 开合标量一致；若已是 7 维则不再变换。
+    可选 ``qpos_dim`` 在变换之后对最后一维截断（如仅要 6 维臂角）。
+
+    ``__getitem__`` / ``__iter__`` 与 `LeRobotDataset` 一致；额外设置 ``action`` 为 ``actions`` 的别名（兼容旧脚本）。
+    """
 
     def __init__(
         self,
-        root_dir: str,
-        name: str,
+        repo_id: Optional[str] = None,
+        episodes: Optional[List[int]] = None,
         split: str = "train",
+        root_dir: Optional[str] = None,
         *,
-        obs_image_key: str = "image",
-        obs_wrist_key: str = "hand_image",
-        obs_state_key: str = "robot_state",
-        action_key: str = "None",
-        language_key: str = "None",
-        layout: dict | None = None,
-        max_episodes: int | None = None,
-        max_steps: int | None = None,
+        name: Optional[str] = None,
+        image_transforms=None,
+        state_key: str = "observation.state",
+        action_key: str = "action",
+        decode_video_keys: Optional[List[str]] = None,
+        video_backend: str = "pyav",
+        max_episodes: Optional[int] = None,
+        max_steps: Optional[int] = None,
         step_stride: int = 1,
-        qpos_dim: int | None = None,   # 例如 UR5 传 6；Franka 传 7；None=不截断
-        strict: bool = True,
-        force_tf_cpu: bool = True,     
+        qpos_dim: Optional[int] = None,
     ) -> None:
-        super().__init__()
-        self.root_dir = root_dir
-        self.name = name
-        self.split = split
+        if repo_id is None:
+            if not root_dir or not name:
+                raise TypeError(
+                    "BerkeleyUr5Dataset 需要 repo_id（LeRobot 数据集目录），或同时提供 root_dir 与 name"
+                )
+            repo_id = os.path.join(os.path.expanduser(str(root_dir)), str(name))
 
-        self.obs_image_key = obs_image_key
-        self.obs_wrist_key = obs_wrist_key
-        self.obs_state_key = obs_state_key
-        self.action_key = action_key
-        self.language_key = language_key
+        if episodes is None and max_episodes is not None:
+            episodes = list(range(int(max_episodes)))
 
-        self.layout = layout or dict(self.DEFAULT_LAYOUT)
-        self.max_episodes = max_episodes
+        super().__init__(
+            repo_id=repo_id,
+            episodes=episodes,
+            split=split,
+            root_dir=None,
+            image_transforms=image_transforms,
+            state_key=state_key,
+            action_key=action_key,
+            decode_video_keys=decode_video_keys,
+            video_backend=video_backend,
+        )
+
         self.max_steps = max_steps
         self.step_stride = int(step_stride)
         self.qpos_dim = qpos_dim
-        self.strict = strict
 
-        # 只做“配置 + 建pipeline”，不遍历、不转 numpy、不缓存
-        if force_tf_cpu:
-            try:
-                tf.config.set_visible_devices([], "GPU")
-            except Exception:
-                pass
+    def _slice_time(self, x):
+        if x is None:
+            return None
+        y = x[:: self.step_stride]
+        if self.max_steps is not None:
+            y = y[: self.max_steps]
+        return y
 
-        with tf.device("/CPU:0"):
-            self._ds = tfds.load(
-                name,
-                data_dir=root_dir,
-                split=split,
-                shuffle_files=False,
-            )
+    @staticmethod
+    def _raw_state_to_arm_gripper(states: np.ndarray) -> np.ndarray:
+        """(T,15)→(T,7) 或 (15,)→(7,)；已为 (…,7) 则原样返回。"""
+        s = np.asarray(states, dtype=np.float32)
+        if s.size == 0:
+            return s
+        d = s.shape[-1]
+        if d == 7:
+            return s
+        if d < _GRIPPER_IS_CLOSED_IDX + 1:
+            return s
+        closed = s[..., _GRIPPER_IS_CLOSED_IDX : _GRIPPER_IS_CLOSED_IDX + 1]
+        grip = np.where(closed > 0.5, _GRIPPER_CLOSED, _GRIPPER_OPEN).astype(np.float32)
+        joints = s[..., _STATE_JOINT_SLICE]
+        return np.concatenate([joints, grip], axis=-1)
 
-    def _episode_name(self, episode, default: str) -> str:
-        try:
-            fp = episode["episode_metadata"]["file_path"].numpy()
-            if isinstance(fp, (bytes, bytearray)):
-                return fp.decode("utf-8", errors="replace")
-            return str(fp)
-        except Exception:
-            return default
+    def _berkeley_postprocess(self, out: dict) -> dict:
+        out = dict(out)
+        out["video"] = self._slice_time(out.get("video"))
+        out["videos"] = {k: self._slice_time(v) for k, v in out.get("videos", {}).items()}
+        out["states"] = self._slice_time(out.get("states"))
+        out["actions"] = self._slice_time(out.get("actions"))
+        if out["states"] is not None:
+            out["states"] = self._raw_state_to_arm_gripper(out["states"])
+        if self.qpos_dim is not None and out["states"] is not None:
+            out["states"] = np.asarray(out["states"], dtype=np.float32)[..., : self.qpos_dim]
+        if out.get("actions") is not None:
+            out["action"] = out["actions"]
+        return out
 
-    def _convert_episode(self, episode, ep_i: int) -> dict:
-        ep_name = self._episode_name(episode, default=f"{self.name}_ep_{ep_i}")
-
-        frames = []
-        wrists = []
-        qpos_seq = []
-        full_state_seq = []
-        action_seq = []
-        lang_seq = []
-
-        kept = 0
-        for step_i, step in enumerate(episode["steps"]):
-            if step_i % self.step_stride != 0:
-                continue
-            if self.max_steps is not None and kept >= self.max_steps:
-                break
-            kept += 1
-
-            try:
-                obs = step["observation"]
-                
-                img = obs[self.obs_image_key].numpy()  # (H,W,3) uint8
-                frames.append(img)
-
-                if self.obs_wrist_key in obs:
-                    wrists.append(obs[self.obs_wrist_key].numpy())
-                else:
-                    wrists.append(None)
-
-                state = obs[self.obs_state_key].numpy().astype(np.float32)
-                full_state_seq.append(state)
-
-                qpos = state[self.layout["qpos"]].astype(np.float32)
-                if self.qpos_dim is not None:
-                    qpos = qpos[: self.qpos_dim]
-                qpos_seq.append(qpos)
-
-                if self.action_key in step:
-                    # action_seq.append(step['action'][self.action_key].numpy().astype(np.float32))
-                    action_seq.append(step['action']['actions'].numpy().astype(np.float32))
-                else:
-                    action_seq.append(None)
-
-                if self.language_key in step:
-                    lang_seq.append(step[self.language_key].numpy())  # bytes
-                else:
-                    lang_seq.append(None)
-
-            except Exception as e:
-                if self.strict:
-                    raise RuntimeError(f"[{self.name}][{self.split}] episode={ep_i} step={step_i} parse failed: {e}") from e
-                continue
-
-        video = np.asarray(frames, dtype=np.uint8)
-        full_state = np.asarray(full_state_seq, dtype=np.float32)
-        states = np.asarray(qpos_seq, dtype=np.float32)
-
-        # wrist
-        if all(w is None for w in wrists):
-            wrist = None
-        else:
-            first = next(w for w in wrists if w is not None)
-            wrist = np.asarray([(np.zeros_like(first) if w is None else w) for w in wrists], dtype=np.uint8)
-
-        # action
-        if any(a is not None for a in action_seq):
-            first = next(a for a in action_seq if a is not None)
-            action = np.asarray([(np.zeros_like(first) if a is None else a) for a in action_seq], dtype=np.float32)
-        else:
-            action = None
-
-        # language
-        language = np.asarray(lang_seq, dtype=object) if any(l is not None for l in lang_seq) else None
-
-        return dict(
-            video=video,
-            wrist=wrist,
-            states=states,          # 关节角 qpos
-            full_state=full_state,  # 原始 state（调试用）
-            action=action,
-            language=language,
-            name=ep_name,
-        )
+    def __getitem__(self, idx):
+        return self._berkeley_postprocess(super().__getitem__(idx))
 
     def __iter__(self):
-        for ep_i, episode in enumerate(self._ds):
-            if self.max_episodes is not None and ep_i >= self.max_episodes:
-                break
-            yield self._convert_episode(episode, ep_i)
+        for i in range(len(self)):
+            yield self[i]
 
 
 if __name__ == "__main__":
-    ROOT = "/inspire/hdd/global_user/xiesicheng-253108120120/project/dzj/CalibAll/dataset/tfds/"
-    NAME = "berkeley_autolab_ur5"
+    # 示例：本地 LeRobot 2.1 转换目录（见 config/berkeley_autolab_ur5.yaml）
+    BASE = "/cpfs02/user/xiesicheng.xsc/convert/oxe/lerobot_2.1"
+    ds = BerkeleyUr5Dataset(root_dir=BASE, name="berkeley_autolab_ur5", max_episodes=1, max_steps=50)
 
-    ds = BerkeleyUr5Dataset(
-        root_dir=ROOT,
-        name=NAME,
-        split="train",       # 现在用 train 也不会在 init 爆内存（逐 episode 读）
-        max_episodes=3,
-        max_steps=200,       # 先小一点验证；跑通再放开/设为 None
-    )
-
-    for i, ep in enumerate(ds):
-        print("=" * 80)
-        print("episode", i, "name:", ep["name"])
-        print("video", ep["video"].shape, ep["video"].dtype)
-        print("states(qpos)", ep["states"].shape, ep["states"].dtype)
-
+    ep = ds[0]
+    print("name:", ep["name"])
+    print("video", None if ep["video"] is None else ep["video"].shape, ep["video"].dtype if ep["video"] is not None else None)
+    print("states", ep["states"].shape, ep["states"].dtype)
+    print("actions", None if ep["actions"] is None else ep["actions"].shape)

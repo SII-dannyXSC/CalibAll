@@ -1,0 +1,46 @@
+# ALOHA 双臂机器人配置（仅双臂，不含 body）
+names:
+  # 左臂
+  - fl_base_link
+  - fl_link1
+  - fl_link2
+  - fl_link3
+  - fl_link4
+  - fl_link5
+  - fl_link6
+  - fl_link7
+  - fl_link8
+  # 右臂
+  - fr_base_link
+  - fr_link1
+  - fr_link2
+  - fr_link3
+  - fr_link4
+  - fr_link5
+  - fr_link6
+  - fr_link7
+  - fr_link8
+
+eef_name: fl_link8
+
+mesh_paths:
+  # 左臂
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/base_link.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link1.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link2.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link3.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link4.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link5.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link6.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link7.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link8.dae
+  # 右臂
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/base_link.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link1.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link2.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link3.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link4.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/link5.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link6.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link7.dae
+  - third_party/dual_urdf/Agilex_Cobot_Magic/aloha_new_description/meshes/piper_slave_meshes/link8.dae

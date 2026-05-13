@@ -1,0 +1,21 @@
+names:
+  - fr3_link0
+  - fr3_link1
+  - fr3_link2
+  - fr3_link3
+  - fr3_link4
+  - fr3_link5
+  - fr3_link6
+  - fr3_link7
+
+eef_name: fr3_link8
+
+mesh_paths:
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link0.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link1.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link2.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link3.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link4.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link5.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link6.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/link7.dae

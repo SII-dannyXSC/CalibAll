@@ -1,0 +1,32 @@
+defaults:
+  - robot: ur5e_robotiq
+  - _self_
+
+calib_dataset_name: robomind/ur_1rgb
+dataset_name: bread_in_basket_1
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data/RoboMIND_lerobot_v2.1/benchmark1_0_compressed/ur_1rgb
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: actions.joint_position
+  action_key: none
+  
+tf:
+  _target_: src.caliball.robot.composite.ur5e_robotiq.Ur5eRobotiqTF
+  arm_names: ${robot.arm.names}
+  gripper_names: ${robot.gripper.names}
+  arm_eef_name: ${robot.arm.eef_name}
+  gripper_eef_name: ${robot.gripper.eef_name}
+  gripper_mount_yaw_deg: 90.0
+
+label:
+  output_dir: ./label_out/${dataset_name}
+  calib_dataset_name: ${dataset_name}
+  camera_names:
+    - observation.images.camera_top
+  eef_rotation_type: euler_xyz
+  # episode_start: 0
+  # max_episodes: 10
+  # skip_mask: false
+  # device: cuda
