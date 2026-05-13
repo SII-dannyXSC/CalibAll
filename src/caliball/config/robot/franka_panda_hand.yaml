@@ -1,0 +1,5 @@
+# 臂：fr3.urdf；手爪：fr3_hand.urdf 子链（Fr3PandaGripperTF 在 fr3_link8 法兰系下 FK）
+# 对外关节 8 维：7 臂 + 1 开合。
+defaults:
+  - arm/fr3@arm
+  - gripper/panda_hand@gripper

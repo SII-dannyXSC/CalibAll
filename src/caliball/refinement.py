@@ -15,6 +15,7 @@ from src.caliball.utils.sam3_extractor import Sam3Extractor
 class Refinement:
     def __init__(self, config):
         self.config = config
+        self.device = getattr(config, "device", "cuda")
 
         self.robot_config = build_robot_config(config)
         self.robot_tf = build_robot(config, self.robot_config)
@@ -22,20 +23,40 @@ class Refinement:
 
         self.sam3_extractor = Sam3Extractor(bpe_path=config.bpe_path, ckpt_path=config.ckpt_path)
 
+    def _to_float_tensor(self, value):
+        if isinstance(value, torch.Tensor):
+            return value.detach().clone().to(device=self.device, dtype=torch.float32)
+        return torch.as_tensor(value, dtype=torch.float32, device=self.device)
+
+    def _prepare_link_poses(self, joint_angles):
+        link_poses_list = self.robot_tf.fkine_all(joint_angles)
+        return torch.as_tensor(link_poses_list, dtype=torch.float32, device=self.device)
+
+    def _prepare_mask_tensor(self, mask):
+        if mask is None:
+            raise ValueError("mask 不能为空")
+
+        mask_tensor = self._to_float_tensor(mask)
+        if mask_tensor.ndim == 2:
+            mask_tensor = mask_tensor.unsqueeze(0)
+        if mask_tensor.ndim == 4 and mask_tensor.shape[1] == 1:
+            mask_tensor = mask_tensor[:, 0]
+        if mask_tensor.ndim != 3:
+            raise ValueError(f"mask 需要是 (H, W) 或 (B, H, W)，当前 shape={tuple(mask_tensor.shape)}")
+        return (mask_tensor > 0).float()
+
     def render(self, video, joint_angles, intrinsic, extrinsic):
         H, W = video.shape[1:3]
-        device = "cuda"
-        solver = RBSolver(self.mesh_paths, H, W, extrinsic, device = device)
-        solver.to(device)
+        solver = RBSolver(self.mesh_paths, H, W, extrinsic, device=self.device)
+        solver.to(self.device)
 
-        link_poses_list = self.robot_tf.fkine_all(joint_angles[:1])    # 1 N 4 4
-        link_poses_list = torch.tensor(link_poses_list).to(device = device,dtype=torch.float32)
+        link_poses_list = self._prepare_link_poses(joint_angles[:1])
 
         dps = {
             "global_step": 0,
-            "mask": torch.zeros((H, W)).unsqueeze(0).to(device=device),
+            "mask": torch.zeros((H, W), device=self.device, dtype=torch.float32).unsqueeze(0),
             "link_poses": link_poses_list,
-            "K": torch.tensor(intrinsic).unsqueeze(0).to(dtype=torch.float32, device=device)
+            "K": self._to_float_tensor(intrinsic).unsqueeze(0),
         }
 
         result, loss_dict = solver.forward(dps)
@@ -50,22 +71,23 @@ class Refinement:
 
         return result, loss_dict
 
-    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, max_steps=3000):
+    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0):
         H, W = video.shape[1:3]
-        device = "cuda"
-        solver = RBSolver(self.mesh_paths, H, W, extrinsic, device = device)
-        solver.to(device)
+        extrinsic = self._to_float_tensor(extrinsic)
+        solver = RBSolver(self.mesh_paths, H, W, extrinsic, device=self.device)
+        solver.to(self.device)
 
-        link_poses_list = self.robot_tf.fkine_all(joint_angles[:1])    # 1 N 4 4
-        link_poses_list = torch.tensor(link_poses_list).to(device = device,dtype=torch.float32)
+        link_poses_list = self._prepare_link_poses(joint_angles[mask_id:mask_id + 1])
 
-        mask = self.sam3_extractor.extract_masks(video[0])
+        if mask is None:    
+            mask = self.sam3_extractor.extract_masks(video[mask_id])
+        mask_tensor = self._prepare_mask_tensor(mask)
 
         dps = {
             "global_step": 0,
-            "mask": mask.unsqueeze(0).to(device=device),
+            "mask": mask_tensor,
             "link_poses": link_poses_list,
-            "K": torch.tensor(intrinsic).unsqueeze(0).to(dtype=torch.float32, device=device)
+            "K": self._to_float_tensor(intrinsic).unsqueeze(0),
         }
 
         pose_optimizer =  torch.optim.Adam(
@@ -94,14 +116,16 @@ class Refinement:
                     f.write(str(loss))
                 with open(os.path.join(save_path, 'tsfm.txt'),'w')as f:
                     f.write(str(tsfm))
+                with open(os.path.join(save_path, 'intrinsic.txt'),'w') as f:
+                    f.write(str(intrinsic))
 
                 idx=0
-                cur_rgb = video[0][:, :, ::-1]
-                img = Image.fromarray(video[0])
+                cur_rgb = video[mask_id][:, :, ::-1]
+                img = Image.fromarray(video[mask_id])
                 img.save(os.path.join(base_path, f'origin.png'))
                 
                 render_pre = output["rendered_masks"][idx].detach().cpu()
-                render_gt = mask.detach().cpu()[0].float()
+                render_gt = mask_tensor.detach().cpu()[0].float()
                 
                 save_img(render_gt,path = os.path.join(save_path, f'mask_{idx}_gt.png'))
                 save_img(render_gt,path = os.path.join(base_path, f'mask_gt.png'))
@@ -116,11 +140,3 @@ class Refinement:
                 cv2.imwrite(os.path.join(save_path, f'output_with_mask_{idx}.png'), overlay)
                 cv2.imwrite(os.path.join(pred_mask_path, f'{k}.png'), overlay)
         return output, loss_dict     
-                        
-
-        # H, W = video.shape[1:3]
-        # solver = RBSolver(mesh_paths, H, W, extrinsic, device = "cuda")
-        # solver = solver.to("cuda")
-        # solver.eval()
-        # solver.forward(video, joint_angles)
-        # return solver.output

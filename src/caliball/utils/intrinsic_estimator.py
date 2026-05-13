@@ -134,5 +134,5 @@ class MoGeEstimator:
         return intrinsic, 1.0, 1.0
 
 
-def build_intrinsic_estimator():
-    return MoGeEstimator()
+def build_intrinsic_estimator(model_id="Ruicheng/moge-2-vitl-normal"):
+    return MoGeEstimator(model_id=model_id)

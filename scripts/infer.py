@@ -27,33 +27,21 @@ config.tracker_id = "cotracker3_offline"
 config.tracker_ckpt_path = "ckpt/cotracker/scaled_offline.pth"
 config.bpe_path = "third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz"
 config.ckpt_path = "ckpt/sam3/sam3.pt"
-config.robot_type = "ur5e"
-# config.robot_type = "franka"
+# config.robot_type = "ur5e"
+config.robot_type = "franka"
 
-# dataset = DroidDataset("/inspire/hdd/global_user/xiesicheng-253108120120/data/droid_example", name="droid_100",split="train[:10]")
-# dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
-# dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
+dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
 
 # ROOT = "/inspire/hdd/global_user/xiesicheng-253108120120/project/dzj/CalibAll/dataset/tfds/"
-# NAME = "taco_play"
+# NAME = "berkeley_autolab_ur5"
 
-# dataset = TacoPlayDataset(
+# dataset = BerkeleyUr5Dataset(
 #     root_dir=ROOT,
 #     name=NAME,
 #     split="train",       # 现在用 train 也不会在 init 爆内存（逐 episode 读）
 #     max_episodes=3,
+#     max_steps=200,       # 先小一点验证；跑通再放开/设为 None
 # )
-
-ROOT = "/inspire/hdd/global_user/xiesicheng-253108120120/project/dzj/CalibAll/dataset/tfds/"
-NAME = "berkeley_autolab_ur5"
-
-dataset = BerkeleyUr5Dataset(
-    root_dir=ROOT,
-    name=NAME,
-    split="train",       # 现在用 train 也不会在 init 爆内存（逐 episode 读）
-    max_episodes=3,
-    max_steps=200,       # 先小一点验证；跑通再放开/设为 None
-)
 
 # ROOT = "/inspire/hdd/global_user/xiesicheng-253108120120/project/dzj/CalibAll/dataset/tfds/"
 # NAME = "toto"
@@ -81,32 +69,37 @@ import numpy as np
 # import pdb;pdb.set_trace()
 
 cnt = 0
-for data in dataset:
-    video = data["video"]    # T H W C
+data = dataset[1]
+if 1:
+# for data in dataset:
+    videos = data["videos"]    # T H W C
+    video = videos["observation.images.camera_left"]
+
     joint_angles = data["states"]  # T 6
 
     length = len(video)
 
-    start = length//2
+    save_path = f"results/{time.time()}_{cnt}"
+    os.makedirs(save_path, exist_ok=True)
+
+    # frame_path = f"{save_path}/frames"
+    # os.makedirs(frame_path, exist_ok=True)
+    # for i, img in enumerate(video):
+    #     img_save = Image.fromarray(img)
+    #     img_save.save(os.path.join(frame_path, f"frame_{i:04d}.png"))
+    # exit()
+
+    start = 51
     # start = 0
     # end = min(length, start + 60)
-    end = length
+    end = 125
 
     video = video[start:end]
     joint_angles = joint_angles[start:end]
 
-    save_path = f"results/{time.time()}_{cnt}"
-    os.makedirs(save_path, exist_ok=True)
-
-
     extrinsic, intrinsic = corase_init_pipe.get_extrinsic(video=video, joint_angles=joint_angles, img_idx=0, save_path=save_path)
     print(f"{extrinsic=}")
     print(f"{intrinsic=}")
-    
-    video = video[-20:]
-    joint_angles = joint_angles[-20:]
-    result, loss_dict = refinement_pipe.refine(video=video, joint_angles=joint_angles, intrinsic=intrinsic, extrinsic=extrinsic, base_path=save_path)
 
-    cnt += 1
-    if cnt > 10:
-        break
+    result, loss_dict = refinement_pipe.refine(video=video, joint_angles=joint_angles, intrinsic=intrinsic, extrinsic=extrinsic, base_path=save_path)
+    exit()

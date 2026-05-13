@@ -1,0 +1,38 @@
+defaults:
+  - robot: franka_robotiq
+  - _self_
+
+calib_dataset_name: robomind/franka_3rgb
+dataset_name: 241021_close_trash_bin_1
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data/RoboMIND_lerobot_v2.1/benchmark1_0_compressed/franka_3rgb
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.states.joint_position
+  action_key: observation.states.end_effector
+  
+tf:
+  _target_: src.caliball.robot.composite.franka_robotiq.FrankaRobotiqTF
+  arm_names: ${robot.arm.names}
+  gripper_names: ${robot.gripper.names}
+  arm_eef_name: ${robot.arm.eef_name}
+  gripper_eef_name: ${robot.gripper.eef_name}
+  # 保证渲染mesh是对的
+  gripper_mount_yaw_deg: 30.0
+  # 保证gripper point是对的
+  grasp_point_rotation_align: [0.0, 0.0 , -30.0]   # euler_xyz 角度（度），右乘到 rot_cam；[0,0,0] = 不对齐
+
+
+label:
+  output_dir: ./label_out/${dataset_name}
+  calib_dataset_name: ${dataset_name}
+  camera_names:
+    - observation.images.camera_top
+    - observation.images.camera_left
+    - observation.images.camera_right
+  eef_rotation_type: euler_xyz
+  # episode_start: 0
+  # max_episodes: 10
+  # skip_mask: false
+  # device: cuda

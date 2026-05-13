@@ -1,0 +1,39 @@
+defaults:
+  - robot: franka_panda_hand
+  - _self_
+
+dataset_name: kaist_nonprehensile_converted_externally_to_rlds
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data
+
+dataset:
+  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state
+  action_key: action
+  state_fn:
+    _target_: src.caliball.dataset.calib_lerobot_dataset.StateProcessor
+    arm_joint_stop: 14
+    arm_joint_step: 2          # 交错格式：[q0,w0,q1,w1,...] → 取偶数索引
+    gripper_mode: constant
+    default_gripper_q: 0.0
+
+tf:
+  _target_: src.caliball.robot.composite.franka_hand.FrankaPandaHandTF
+  arm_names: ${robot.arm.names}
+  gripper_names: ${robot.gripper.names}
+  arm_eef_name: ${robot.arm.eef_name}
+  gripper_eef_name: ${robot.gripper.eef_name}
+  gripper_mount_yaw_deg: 0.0
+
+# scripts/label_from_config.py 读取；命令行可覆盖
+label:
+  output_dir: ./label_out/${dataset_name}
+  calib_dataset_name: ${dataset_name}
+  camera_names:
+    - observation.images.image
+  # 与 Kaist action 前 6 维一致：平移 + 轴角（旋转向量）；见 utils_3d.pose_to_hom_mat
+  eef_rotation_type: axis_angle_residual
+  # episode_start: 0
+  # max_episodes: 10
+  # skip_mask: false
+  # device: cuda

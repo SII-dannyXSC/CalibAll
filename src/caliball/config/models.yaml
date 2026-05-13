@@ -1,0 +1,12 @@
+# 公共模型权重 & 仓库路径（所有脚本共享）
+
+dinov2_ckpt_path: ckpt/dinov2/dinov2_vitb14_pretrain.pth
+repo_dir:         third_party/dinov2
+dino_id:          dinov2_vitb14
+
+tracker_repo_dir:  third_party/co-tracker
+tracker_id:        cotracker3_offline
+tracker_ckpt_path: ckpt/cotracker/scaled_offline.pth
+
+bpe_path:  third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz
+ckpt_path: ckpt/sam3/sam3.pt

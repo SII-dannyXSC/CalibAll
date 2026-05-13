@@ -22,6 +22,22 @@ class NVDiffrastRenderer:
         self.opencv2blender = torch.inverse(blender2opencv)
         self.glctx = dr.RasterizeCudaContext(device=device)
 
+    def _prepare_render_inputs(self, verts, faces, K, object_pose=None):
+        if object_pose is not None:
+            device = object_pose.device
+        else:
+            device = verts.device
+
+        verts = verts.to(device=device, dtype=torch.float32).contiguous()
+        faces = faces.to(device=device, dtype=torch.int32).contiguous()
+        K = K.to(device=device, dtype=torch.float32).contiguous()
+        self.opencv2blender = self.opencv2blender.to(device=device, dtype=torch.float32)
+
+        if object_pose is not None:
+            object_pose = object_pose.to(device=device, dtype=torch.float32).contiguous()
+
+        return verts, faces, K, object_pose, device
+
     def render_mask(self, verts, faces, K, object_pose, anti_aliasing=True):
         """
         @param verts: N,3, torch.tensor, float, cuda
@@ -30,14 +46,13 @@ class NVDiffrastRenderer:
         @param object_pose: 4,4 torch.tensor, float, cuda
         @return: mask: 0 to 1, HxW torch.cuda.FloatTensor
         """
-        device = object_pose.device
-        self.opencv2blender= self.opencv2blender.to(device=device)
-        
+        verts, faces, K, object_pose, device = self._prepare_render_inputs(
+            verts, faces, K, object_pose
+        )
+
         proj = K_to_projection(K, self.H, self.W, device=device)
-
         pose = self.opencv2blender @ object_pose
-
-        pos_clip = transform_pos(proj @ pose, verts,device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device)
 
         rast_out, _ = dr.rasterize(self.glctx, pos_clip, faces, resolution=self.resolution)
         if anti_aliasing:
@@ -58,14 +73,13 @@ class NVDiffrastRenderer:
         @param object_pose: 4,4 torch.tensor, float, cuda
         @return: mask: 0 to 1, HxW torch.cuda.FloatTensor
         """
-        device = object_pose.device
-        self.opencv2blender= self.opencv2blender.to(device=device)
-        
+        verts, faces, K, object_pose, device = self._prepare_render_inputs(
+            verts, faces, K, object_pose
+        )
+
         proj = K_to_projection(K, self.H, self.W, device=device)
-
         pose = self.opencv2blender @ object_pose
-
-        pos_clip = transform_pos(proj @ pose, verts,device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device)
 
         rast_out, _ = dr.rasterize(self.glctx, pos_clip, faces, resolution=self.resolution)
         color_value = torch.rand(3, device=device).view(1,3)  # RGB 0~1
@@ -90,9 +104,10 @@ class NVDiffrastRenderer:
         @param object_pose: 4,4 torch.tensor, float, cuda
         @return: results: dict, 包含 'color', 'mask', 'depth'
         """
-        device = object_pose.device
-        self.opencv2blender = self.opencv2blender.to(device=device)
-        
+        verts, faces, K, object_pose, device = self._prepare_render_inputs(
+            verts, faces, K, object_pose
+        )
+
         proj = K_to_projection(K, self.H, self.W, device=device)
 
         # 1. 坐标变换 (世界 -> 相机 -> 裁剪空间)
@@ -101,7 +116,7 @@ class NVDiffrastRenderer:
         
         # pos_clip 形状: 1, N, 4
         # Note: transform_pos 内部应该处理 pose 矩阵乘法的顺序和齐次坐标转换
-        pos_clip = transform_pos(proj @ pose, verts, device=device) 
+        pos_clip = transform_pos(proj @ pose, verts, device=device)
         
         # 2. 光栅化 (Rasterization)
         # rast_out: (1, H, W, 4) - 包含 (x, y, z/w, primitive_id)
@@ -165,8 +180,7 @@ class NVDiffrastRenderer:
         # @param batch_object_poses: N,4,4 torch.tensor, float, cuda
         @return: mask: 0 to 1, HxW torch.cuda.FloatTensor
         """
-        device = verts.device
-        self.opencv2blender = self.opencv2blender.to(device)
+        verts, faces, K, _, device = self._prepare_render_inputs(verts, faces, K)
         proj = K_to_projection(K, self.H, self.W, device=device)
 
         pose = self.opencv2blender

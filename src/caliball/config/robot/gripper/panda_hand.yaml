@@ -1,0 +1,12 @@
+# FR3 Panda hand 夹爪组件（franka_panda_hand 使用）
+names:
+  - fr3_hand
+  - fr3_leftfinger
+  - fr3_rightfinger
+
+eef_name: fr3_hand_tcp
+
+mesh_paths:
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/hand.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/finger.dae
+  - third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description/meshes/visual/finger.dae

@@ -1,82 +1,250 @@
+import re
+import warnings
 import numpy as np
+import torch
+from pathlib import Path
 from torch.utils.data import Dataset
 from lerobot.common.datasets.lerobot_dataset import LeRobotDataset as _LeRobotDataset
 from typing import Optional, List
+
+# torchvision VideoReader 的 pts 可能为 Fraction，需在 lerobot 解码里转为 float，见 lerobot_video_decode_fix
+from src.caliball.dataset.lerobot_video_decode_fix import apply_lerobot_pyav_pts_fraction_fix
+
+apply_lerobot_pyav_pts_fraction_fix()
+
+
+def _apply_datasets_generate_from_dict_fix():
+    """兼容旧版 annotation 写入的 parquet feature 格式。
+
+    旧格式（无 _type 字段）: {"dtype": "float32", "shape": [N], "names": null}
+    datasets 4.x 的 generate_from_dict 遇到无 _type 的 dict 会递归处理其 value，
+    将 "float32" 等字符串传入后调 .items() 报 AttributeError。
+    补丁：检测到 shape+dtype 组合时，直接返回对应的 Sequence/Value feature。
+    """
+    import datasets.features.features as _feat
+
+    _orig = _feat.generate_from_dict
+
+    def _patched(obj):
+        if isinstance(obj, dict) and "_type" not in obj and "dtype" in obj and "shape" in obj:
+            shape = obj.get("shape") or []
+            dtype = obj.get("dtype", "float32")
+            feature = _feat.Value(dtype)
+            for dim in reversed(shape):
+                feature = _feat.Sequence(feature, length=dim if dim else -1)
+            return feature
+        return _orig(obj)
+
+    _feat.generate_from_dict = _patched
+
+
+_apply_datasets_generate_from_dict_fix()
+
+try:
+    from lerobot.common.datasets.video_utils import decode_video_frames
+except ImportError:
+    decode_video_frames = None
+
+_DECODE_VIDEO_WARNED = False
+
+
+def _scan_available_episodes(repo_id: str) -> Optional[List[int]]:
+    """
+    扫描本地 data/chunk-*/episode_*.parquet 文件，返回实际存在的 episode 索引列表。
+    若目录不存在或无法扫描（HF repo），返回 None（交由 lerobot 自行处理）。
+    """
+    data_dir = Path(repo_id) / "data"
+    if not data_dir.is_dir():
+        return None
+    available = []
+    for p in sorted(data_dir.rglob("episode_*.parquet")):
+        m = re.match(r"episode_(\d+)\.parquet$", p.name)
+        if m:
+            available.append(int(m.group(1)))
+    return sorted(available) if available else None
 
 
 class LeRobotDataset(Dataset):
     """
     LeRobot 2.1数据集读取器
-    
+
     支持从HuggingFace Hub加载LeRobot格式的机器人数据集
-    
+
     Args:
         repo_id: HuggingFace上的数据集repo ID，例如 "lerobot/aloha_mobile_cabinet"
         episodes: 要加载的episode索引列表，None表示加载所有episodes
         split: 数据集分割，默认为"train"
         root_dir: 本地缓存目录
         image_transforms: 图像变换函数
+        state_key: 状态数据的键名
+        action_key: 动作数据的键名
+        decode_video_keys: 若为 None 则解码 meta.video_keys 中全部相机；可传入子集以进一步加速
+        video_backend: 视频解码后端，默认 "pyav"（torchvision VideoReader + PyAV），避免 torchcodec 依赖系统 FFmpeg/libavutil。
+            需要时可改为 "torchcodec" 等 lerobot 支持的值。
+
+    按 episode 批量读 parquet，每路视频对整段 timestamps 调用一次 decode_video_frames。
     """
-    
+
     def __init__(
-        self, 
+        self,
         repo_id: str,
         episodes: Optional[List[int]] = None,
         split: str = "train",
         root_dir: Optional[str] = None,
         image_transforms=None,
+        state_key: str = "observation.states.joint_position",
+        action_key: str = "observation.states.end_effector",
+        decode_video_keys: Optional[List[str]] = None,
+        video_backend: str = "pyav",
     ) -> None:
         super().__init__()
-        
+
         self.repo_id = repo_id
         self.split = split
         self.root_dir = root_dir
         self.image_transforms = image_transforms
-        
-        # 加载LeRobot数据集
+        self.state_key = state_key
+        self.action_key = action_key
+        self.decode_video_keys = decode_video_keys
+        self.video_backend = video_backend
+        _vb = video_backend
         if episodes is not None:
+            episodes_to_load = episodes
+        else:
+            # 扫描实际存在的 parquet 文件，避免不完整数据集触发 lerobot assert
+            episodes_to_load = _scan_available_episodes(repo_id)
+
+        if episodes_to_load is not None:
             self.lerobot_ds = _LeRobotDataset(
                 repo_id=repo_id,
-                episodes=episodes,
+                episodes=episodes_to_load,
                 root=root_dir,
-                video_backend="pyav",  # 添加这一行
+                video_backend=_vb,
             )
         else:
             self.lerobot_ds = _LeRobotDataset(
                 repo_id=repo_id,
                 root=root_dir,
-                video_backend="pyav",  # 添加这一行
+                video_backend=_vb,
             )
-        
+
         # 获取数据集元信息
         self.meta = self.lerobot_ds.meta
         self.fps = self.meta.fps
         self.robot_type = self.meta.robot_type
-        self.camera_keys = self.meta.camera_keys if hasattr(self.meta, 'camera_keys') else []
-        
+        self.camera_keys = self.meta.camera_keys if hasattr(self.meta, "camera_keys") else []
+
         # 获取episode索引信息（不加载实际数据）
         self.episode_data_index = self.lerobot_ds.episode_data_index
-        self.total_episodes = len(self.episode_data_index['from'])
-        
-        print(f"初始化LeRobot数据集: {self.repo_id}")
-        print(f"总帧数: {len(self.lerobot_ds)}")
-        print(f"总episodes: {self.total_episodes}")
-        print(f"FPS: {self.fps}")
-        print(f"机器人类型: {self.robot_type}")
-        print(f"相机键: {self.camera_keys}")
-        print("数据将在访问时按需加载")
-    
+        self.total_episodes = len(self.episode_data_index["from"])
+
     def __len__(self):
         """获取数据集中的episode数量"""
         return self.total_episodes
-    
+
+    @staticmethod
+    def _tensor_batch_to_numpy(x):
+        if x is None:
+            return None
+        if isinstance(x, torch.Tensor):
+            return x.detach().cpu().numpy()
+        return np.asarray(x)
+
+    @staticmethod
+    def _chw_float_to_hwc_uint8(frames: torch.Tensor) -> np.ndarray:
+        """(T,C,H,W) float [0,1] -> (T,H,W,C) uint8"""
+        x = frames.detach().cpu().numpy()
+        x = np.transpose(x, (0, 2, 3, 1))
+        if x.dtype in (np.float32, np.float64):
+            x = (x * 255.0).clip(0, 255).astype(np.uint8)
+        return x
+
+    def _apply_image_transforms(self, img: np.ndarray) -> np.ndarray:
+        if self.image_transforms is None:
+            return img
+        return self.image_transforms(img)
+
+    def _getitem_episode(self, idx: int) -> dict:
+        """一次切片 parquet + 每路视频一次 decode_video_frames（整段 timestamps）。"""
+        start_idx = int(self.episode_data_index["from"][idx].item())
+        end_idx = int(self.episode_data_index["to"][idx].item())
+        if start_idx >= end_idx:
+            return dict(
+                video=None,
+                videos={},
+                states=None,
+                actions=None,
+                name=f"{self.repo_id}_episode_{idx}",
+            )
+
+        batch = self.lerobot_ds.hf_dataset[start_idx:end_idx]
+        ep_idx = int(self._tensor_batch_to_numpy(batch["episode_index"]).reshape(-1)[0])
+
+        ts = batch["timestamp"]
+        if isinstance(ts, torch.Tensor):
+            timestamps = ts.flatten().tolist()
+        else:
+            timestamps = list(ts)
+
+        videos = {}
+        vid_keys = self.decode_video_keys
+        if vid_keys is None:
+            vid_keys = list(self.meta.video_keys)
+        keys_to_decode = [k for k in vid_keys if k in self.meta.video_keys]
+
+        if decode_video_frames is not None and len(keys_to_decode) > 0:
+            for vid_key in keys_to_decode:
+                video_path = self.lerobot_ds.root / self.meta.get_video_file_path(ep_idx, vid_key)
+                frames_t = decode_video_frames(
+                    video_path,
+                    timestamps,
+                    self.lerobot_ds.tolerance_s,
+                    self.video_backend,
+                )
+                arr = self._chw_float_to_hwc_uint8(frames_t)
+                if self.image_transforms is not None:
+                    arr = np.stack([self._apply_image_transforms(arr[i]) for i in range(len(arr))], axis=0)
+                videos[vid_key] = arr
+        elif len(keys_to_decode) > 0:
+            global _DECODE_VIDEO_WARNED
+            if not _DECODE_VIDEO_WARNED:
+                _DECODE_VIDEO_WARNED = True
+                warnings.warn(
+                    "decode_video_frames 不可用（lerobot video_utils 未导入），将跳过视频解码，"
+                    "仅返回 parquet 中的 states/actions。",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        states = None
+        actions = None
+        if self.state_key in batch:
+            states = self._tensor_batch_to_numpy(batch[self.state_key])
+        if self.action_key in batch:
+            actions = self._tensor_batch_to_numpy(batch[self.action_key])
+            
+        main_video = None
+        if videos:
+            if self.camera_keys and self.camera_keys[0] in videos:
+                main_video = videos[self.camera_keys[0]]
+            else:
+                main_video = next(iter(videos.values()))
+
+        return dict(
+            video=main_video,
+            videos=videos,
+            states=states,
+            actions=actions,
+            name=f"{self.repo_id}_episode_{idx}",
+        )
+
     def __getitem__(self, idx):
         """
         获取指定索引的episode数据（懒加载模式）
-        
+
         Args:
             idx: episode索引
-            
+
         Returns:
             dict: 包含以下键的字典
                 - video: 主相机的视频帧数组 (T, H, W, C)
@@ -85,154 +253,19 @@ class LeRobotDataset(Dataset):
                 - actions: 动作序列 (T, action_dim)
                 - name: episode名称
         """
-        # 获取该episode的起止帧索引
-        start_idx = self.episode_data_index['from'][idx].item()
-        end_idx = self.episode_data_index['to'][idx].item()
-        
-        episode_frames = []
-        episode_states = []
-        episode_actions = []
-        
-        # 按需读取该episode的所有帧
-        for frame_idx in range(start_idx, end_idx):
-            data = self.lerobot_ds[frame_idx]
-            
-            # 提取图像数据（支持多个相机）
-            frames = {}
-            for cam_key in self.camera_keys:
-                if cam_key in data:
-                    img = data[cam_key].numpy()
-                    if self.image_transforms is not None:
-                        img = self.image_transforms(img)
-                    frames[cam_key] = img
-            
-            # 提取状态和动作
-            state_key = "observation.states.joint_position"
-            action_key = "observation.states.end_effector"
-            state = data[state_key].numpy() if state_key in data else None
-            action = data[action_key].numpy() if action_key in data else None
-            
-            episode_frames.append(frames)
-            episode_states.append(state)
-            episode_actions.append(action)
-        
-        # 构建视频数据
-        videos = {}
-        for cam_key in self.camera_keys:
-            frames_list = [frame[cam_key] for frame in episode_frames if cam_key in frame]
-            if frames_list:
-                # 将每帧从 (C, H, W) 转换为 (H, W, C)，并转换为 uint8 格式
-                processed_frames = []
-                for img in frames_list:
-                    # Transpose: (C, H, W) -> (H, W, C)
-                    if img.ndim == 3:
-                        img = img.transpose(1, 2, 0)
-                    # 如果是浮点数 [0, 1]，转换为 uint8 [0, 255]
-                    if img.dtype in [np.float32, np.float64]:
-                        img = (img * 255).clip(0, 255).astype(np.uint8)
-                    processed_frames.append(img)
-                videos[cam_key] = np.array(processed_frames)
-        
-        # 默认使用第一个相机作为主视频
-        main_video = videos['observation.images.camera_right'] if self.camera_keys else None
-        
-        # 转换状态和动作为numpy数组
-        states = np.array(episode_states) if episode_states and episode_states[0] is not None else None
-        actions = np.array(episode_actions) if episode_actions and episode_actions[0] is not None else None
-        
-        return dict(
-            video=main_video,
-            videos=videos,
-            states=states,
-            actions=actions,
-            name=f"{self.repo_id}_episode_{idx}",
-        )
-    
-    def get_stats(self, max_episodes: Optional[int] = None):
-        """
-        获取数据集统计信息
-        
-        Args:
-            max_episodes: 用于计算统计信息的最大episode数量，None表示使用所有episodes
-        
-        Returns:
-            dict: 包含状态和动作的统计信息
-        """
-        print("正在计算数据集统计信息...")
-        
-        all_states = []
-        all_actions = []
-        
-        num_episodes = min(max_episodes, self.total_episodes) if max_episodes else self.total_episodes
-        
-        for idx in range(num_episodes):
-            sample = self[idx]
-            if sample['states'] is not None:
-                all_states.append(sample['states'])
-            if sample['actions'] is not None:
-                all_actions.append(sample['actions'])
-            
-            if (idx + 1) % 10 == 0:
-                print(f"已处理 {idx + 1}/{num_episodes} episodes")
-        
-        stats = {}
-        if all_states:
-            all_states = np.concatenate(all_states, axis=0)
-            stats['state_mean'] = np.mean(all_states, axis=0)
-            stats['state_std'] = np.std(all_states, axis=0)
-            stats['state_min'] = np.min(all_states, axis=0)
-            stats['state_max'] = np.max(all_states, axis=0)
-        
-        if all_actions:
-            all_actions = np.concatenate(all_actions, axis=0)
-            stats['action_mean'] = np.mean(all_actions, axis=0)
-            stats['action_std'] = np.std(all_actions, axis=0)
-            stats['action_min'] = np.min(all_actions, axis=0)
-            stats['action_max'] = np.max(all_actions, axis=0)
-        
-        print("统计信息计算完成")
-        return stats
+        return self._getitem_episode(idx)
 
 
 if __name__ == "__main__":
-    # 使用示例
-    
-    # 1. 加载完整数据集
-    # dataset = LeRobotDataset(
-    #     repo_id="lerobot/aloha_mobile_cabinet",
-    #     root_dir="/path/to/cache"
-    # )
-    
-    # 2. 加载指定episodes
-    # dataset = LeRobotDataset(
-    #     repo_id="lerobot/aloha_mobile_cabinet",
-    #     episodes=[0, 1, 2, 3, 4],
-    #     root_dir="/path/to/cache"
-    # )
-    
-    # 3. 测试数据加载
-    # print(f"数据集大小: {len(dataset)}")
-    # sample = dataset[0]
-    # print(f"Episode名称: {sample['name']}")
-    # print(f"视频形状: {sample['video'].shape if sample['video'] is not None else 'None'}")
-    # print(f"状态形状: {sample['states'].shape if sample['states'] is not None else 'None'}")
-    # print(f"动作形状: {sample['actions'].shape if sample['actions'] is not None else 'None'}")
-    # print(f"相机数量: {len(sample['videos'])}")
-    
-    # 4. 获取统计信息
-    # stats = dataset.get_stats()
-    # print(f"状态均值: {stats.get('state_mean', 'N/A')}")
-    # print(f"动作均值: {stats.get('action_mean', 'N/A')}")
-    
-    # 初始化非常快，不加载数据
-    dataset = LeRobotDataset("/cpfs01/user/wenji.zj/dataspace/Data4QwenVLA/RoboMIND_lerobot_v2.1/benchmark1_1_compressed/franka_3rgb/put_the_red_apple_in_the_bowl")
+    dataset = LeRobotDataset(
+        "/cpfs02/user/xiesicheng.xsc/project/CalibAll/data/rdt_aloha_lerobot2.1/airpods_on_second_layer",
+        state_key = "observation.state",
+    )
 
-    # 只在访问时才加载该episode的数据
-    import pdb; pdb.set_trace()
-    sample = dataset[0]  # 这时才读取episode 0的数据
+    import pdb
 
-    # 可以只用前10个episodes计算统计信息
-    # stats = dataset.get_stats(max_episodes=10)
+    pdb.set_trace()
+    sample = dataset[0]
 
     print("LeRobot数据集加载器已准备就绪！")
     print("\n使用方法:")

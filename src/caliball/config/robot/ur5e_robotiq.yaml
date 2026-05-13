@@ -1,0 +1,3 @@
+defaults:
+  - arm/ur5e@arm
+  - gripper/robotiq@gripper

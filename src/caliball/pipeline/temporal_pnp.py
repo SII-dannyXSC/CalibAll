@@ -3,7 +3,7 @@ import cv2
 
 from src.caliball.pipeline.point_tracker import Tracker
 
-def solve_pnp(points_3d, points_2d, camera_matrix, method=cv2.SOLVEPNP_ITERATIVE):
+def solve_pnp(points_3d, points_2d, camera_matrix, method=cv2.SOLVEPNP_ITERATIVE, init_w2c=None):
     dist_coeffs = np.zeros(shape=[8, 1], dtype='float64')
 
     assert points_3d.shape[0] == points_2d.shape[0], 'points 3D and points 2D must have same number of vertices'
@@ -14,10 +14,20 @@ def solve_pnp(points_3d, points_2d, camera_matrix, method=cv2.SOLVEPNP_ITERATIVE
     points_2d = np.ascontiguousarray(points_2d.astype(np.float64))
     points_3d = np.ascontiguousarray(points_3d.astype(np.float64))
     camera_matrix = camera_matrix.astype(np.float64)
+
+    use_guess = init_w2c is not None
+    init_rvec, init_tvec = None, None
+    if use_guess:
+        init_rvec, _ = cv2.Rodrigues(init_w2c[:3, :3])
+        init_tvec = init_w2c[:3, 3:].copy()
+
     _, R_exp, t = cv2.solvePnP(points_3d,
                             points_2d,
                             camera_matrix,
                             dist_coeffs,
+                            rvec=init_rvec,
+                            tvec=init_tvec,
+                            useExtrinsicGuess=use_guess,
                             flags=method)
     R, _ = cv2.Rodrigues(R_exp)
     # 点从世界坐标系变化到相机坐标系的旋转矩阵，描述相机怎么移动到原点

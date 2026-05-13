@@ -1,0 +1,32 @@
+{
+  "typeCheckingMode": "off",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportUnusedImport": "none",
+  "reportGeneralTypeIssues": "none",
+  "exclude": [
+    ".git",
+    ".venv",
+    "data",
+    "third_party",
+    "ckpt",
+    "results",
+    "visualized_videos",
+    "label_out",
+    "manual_label",
+    "assets",
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/node_modules",
+    "**/.ruff_cache",
+    "**/datasets",
+    "**/logs",
+    "**/checkpoints",
+    "**/outputs"
+  ]
+}

@@ -1,0 +1,53 @@
+# xArm7 + menagerie 夹爪：渲染 8 个臂 link（link_base…link7）+ 夹爪座 base（不含 knuckle/finger/inner）
+names:
+  - link_base
+  - link1
+  - link2
+  - link3
+  - link4
+  - link5
+  - link6
+  - link7
+  - xarm_gripper_base_link
+
+eef_name: ${gripper.eef_name}
+
+mesh_paths:
+  - third_party/ufactory_xarm7/assets/link_base.stl
+  - third_party/ufactory_xarm7/assets/link1.stl
+  - third_party/ufactory_xarm7/assets/link2.stl
+  - third_party/ufactory_xarm7/assets/link3.stl
+  - third_party/ufactory_xarm7/assets/link4.stl
+  - third_party/ufactory_xarm7/assets/link5.stl
+  - third_party/ufactory_xarm7/assets/link6.stl
+  - third_party/ufactory_xarm7/assets/end_tool.stl
+  - third_party/ufactory_xarm7/assets/base_link.stl
+
+arm:
+  names:
+    - link_base
+    - link1
+    - link2
+    - link3
+    - link4
+    - link5
+    - link6
+    - link7
+  eef_name: link7
+  start_link: link_base
+  mesh_paths:
+    - third_party/ufactory_xarm7/assets/link_base.stl
+    - third_party/ufactory_xarm7/assets/link1.stl
+    - third_party/ufactory_xarm7/assets/link2.stl
+    - third_party/ufactory_xarm7/assets/link3.stl
+    - third_party/ufactory_xarm7/assets/link4.stl
+    - third_party/ufactory_xarm7/assets/link5.stl
+    - third_party/ufactory_xarm7/assets/link6.stl
+    - third_party/ufactory_xarm7/assets/end_tool.stl
+
+gripper:
+  names:
+    - xarm_gripper_base_link
+  eef_name: link_tcp
+  mesh_paths:
+    - third_party/ufactory_xarm7/assets/base_link.stl
