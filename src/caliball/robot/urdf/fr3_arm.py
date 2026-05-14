@@ -7,7 +7,7 @@ class Fr3Arm(Robot):
     def __init__(self):
         links, name, urdf_string, urdf_filepath = self.URDF_read(
             file_path="robots/fr3/fr3.urdf",
-            tld="./third_party/urdf_files_dataset/urdf_files/oems/xacro_generated/franka_emika/franka_description",
+            tld="./third_party/urdf/franka_description",
         )
         super().__init__(
             links,

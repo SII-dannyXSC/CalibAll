@@ -1,0 +1,50 @@
+dataset: robomind/franka_3rgb
+tasks: [241021_close_trash_bin_1, 241021_insert_marker_1, 241021_open_trash_bin_1,
+  241021_remove_marker_1, 241022_lamp_off_1, 241022_lamp_on_1, 241022_side_pull_close_drawer_1,
+  241022_side_pull_open_drawer_1, 241023_pick_pear_from_bowl_1, 241023_pick_pear_from_bowl_2,
+  241023_place_pear_in_bowl_1, 241023_place_pear_in_bowl_2, 241223_upright_cup, apples_placed_on_a_ceramic_plate,
+  bananas_placed_on_a_ceramic_plate, blue_cub_on_pink, bread_is_placed_on_a_ceramic_plate,
+  cap_close_dustbin, chili_peppers_are_placed_on_a_ceramic_plate, chili_peppers_are_placed_on_the_right_side_of_a_plastic_tray,
+  close_cap_lid, close_cap_trash_can, close_garbage_bin, close_lid, cucumber_placed_on_a_ceramic_plate,
+  flip_marco_cup, mobile_marco_cup, open_cap_lid, open_cap_trash_can_1, open_lid,
+  open_the_drawer, pick_plate_from_plate_rack, pick_up_strawberry_from_bowl, pick_up_strawberry_in_bowl,
+  piled_on_stack_blue_block_on_pink_block, place_in_block_in_plate_1, place_in_block_on_table,
+  place_in_bread_in_plate, place_in_bread_on_plate_1, place_in_bread_on_plate_2, place_in_bread_on_table,
+  place_in_bread_on_table_2, place_in_pick_up_and_throw_away_1, place_in_toy, place_marker,
+  place_plate_in_plate_rack, put_potatoes_on_a_ceramic_plate, put_the_bread_on_the_table,
+  put_the_cucumber_on_the_left_side_of_the_bowl, put_the_red_apple_in_the_bowl, put_the_steamed_buns_on_a_ceramic_plate,
+  red_apple_placed_in_the_center_of_the_desktop, slide_close_drawer, slide_close_drawer_1_1,
+  slide_open_drawer, slide_open_drawer_1, stick_target_blue_on_the_pink_obejct, strawberries_on_a_ceramic_plate,
+  take_marker_pen, turn_off_lamp, turn_on_desk_lamp, side_pull_drawer, side_opening_drawer,
+  yellow_bananas_placed_on_a_plastic_tray, yellow_square_placed_on_ceramic_plate]
+cameras:
+  observation.images.camera_top:
+    intrinsic:
+    - [895.93896, 0, 640]
+    - [0, 895.9389, 360]
+    - [0, 0, 1]
+    extrinsic:
+    - [-0.0124, 0.9987, 0.0495, -0.1512]
+    - [0.9133, 0.0315, -0.4061, -0.577]
+    - [-0.4071, 0.0402, -0.9125, 1.2903]
+    - [0, 0, 0, 1]
+  observation.images.camera_right:
+    intrinsic:
+    - [572.993, 0, 320]
+    - [0, 572.993, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.5394, -0.83, -0.1421, -0.413]
+    - [-0.5207, -0.1961, -0.8309, 0.6093]
+    - [0.6618, 0.5222, -0.5379, 0.7001]
+    - [0, 0, 0, 1]
+  observation.images.camera_left:
+    intrinsic:
+    - [589.6532, 0, 320]
+    - [0, 589.6532, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [-0.8502, -0.5217, -0.0703, 0.7919]
+    - [-0.2253, 0.4813, -0.8471, 0.2301]
+    - [0.4757, -0.7044, -0.5268, 0.9254]
+    - [0, 0, 0, 1]

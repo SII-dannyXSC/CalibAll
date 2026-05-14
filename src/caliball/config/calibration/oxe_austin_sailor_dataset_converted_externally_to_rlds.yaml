@@ -1,0 +1,12 @@
+dataset: austin_sailor_dataset_converted_externally_to_rlds
+cameras:
+  default:
+    intrinsic:
+    - [145.347, 0, 64]
+    - [0, 145.347, 64]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.9213, 0.3859, -0.0486, -0.4771]
+    - [0.3054, -0.7952, -0.5239, -0.313]
+    - [-0.2408, 0.4678, -0.8504, 0.8538]
+    - [0, 0, 0, 1]

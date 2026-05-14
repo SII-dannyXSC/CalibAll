@@ -13,12 +13,12 @@ names:
 eef_name: left_inner_finger
 
 mesh_paths:
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_base_link.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
-  - third_party/urdf_files_dataset/urdf_files/ros-industrial/xacro_generated/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_base_link.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_knuckle.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_outer_finger.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_finger.dae
+  - third_party/urdf/robotiq/robotiq_2f_85_gripper_visualization/meshes/visual/robotiq_arg2f_85_inner_knuckle.dae

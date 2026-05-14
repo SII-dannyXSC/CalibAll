@@ -2,12 +2,12 @@ from roboticstoolbox.robot.Robot import Robot
 
 
 class XArm7(Robot):
-    """xArm7 + 夹爪（third_party/ufactory_xarm7/xarm7.urdf，源自 mujoco_menagerie ufactory_xarm7）。"""
+    """xArm7 + 夹爪（third_party/urdf/xarm7/xarm7.urdf，源自 mujoco_menagerie ufactory_xarm7）。"""
 
     def __init__(self):
         links, name, urdf_string, urdf_filepath = self.URDF_read(
             file_path="xarm7.urdf",
-            tld="./third_party/ufactory_xarm7",
+            tld="./third_party/urdf/xarm7",
         )
         super().__init__(
             links,

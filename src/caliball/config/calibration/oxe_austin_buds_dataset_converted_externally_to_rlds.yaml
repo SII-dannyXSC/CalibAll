@@ -1,0 +1,12 @@
+dataset: austin_buds_dataset_converted_externally_to_rlds
+cameras:
+  default:
+    intrinsic:
+    - [211.118, 0, 64]
+    - [0, 211.118, 64]
+    - [0, 0, 1]
+    extrinsic:
+    - [-0.0038, 0.994, -0.109, -0.0409]
+    - [0.8874, -0.0469, -0.4585, -0.484]
+    - [-0.4609, -0.0985, -0.882, 1.428]
+    - [0, 0, 0, 1]

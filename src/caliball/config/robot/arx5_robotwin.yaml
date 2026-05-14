@@ -28,22 +28,22 @@ eef_name:
 
 mesh_paths:
   # 左臂
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/base_arm.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link1.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link2.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link3.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link4.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link5.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link6.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link7.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link8.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/base_arm.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link1.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link2.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link3.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link4.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link5.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link6.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link7.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link8.dae
   # 右臂
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/base_arm.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link1.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link2.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link3.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link4.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link5.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link6.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link7.dae
-  - third_party/dual_urdf/Agilex_Cobot_Magic_robotwin/urdf/aloha_maniskill_sim/meshes/link8.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/base_arm.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link1.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link2.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link3.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link4.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link5.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link6.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link7.dae
+  - third_party/urdf/arx5/urdf/aloha_maniskill_sim/meshes/link8.dae

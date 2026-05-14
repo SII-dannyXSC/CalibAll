@@ -11,7 +11,7 @@ class AlohaCobotMagic(Robot):
     def __init__(self):
         links, name, urdf_string, urdf_filepath = self.URDF_read(
             file_path="aloha_new_description/urdf/aloha_dual_arm.urdf",
-            tld="./third_party/dual_urdf/Agilex_Cobot_Magic",
+            tld="./third_party/urdf/aloha",
         )
         super().__init__(
             links,
