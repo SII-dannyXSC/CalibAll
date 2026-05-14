@@ -1,0 +1,12 @@
+dataset: ucsd_kitchen_dataset_converted_externally_to_rlds
+cameras:
+  default:
+    intrinsic:
+    - [480.907, 0, 320]
+    - [0, 480.907, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.9965, 0.0782, 0.03, -0.373]
+    - [0.0349, -0.062, -0.9975, 0.2569]
+    - [-0.0761, 0.995, -0.0645, 0.7366]
+    - [0, 0, 0, 1]

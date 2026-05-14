@@ -1,0 +1,13 @@
+dataset: robomind/ur_1rgb
+tasks: [bread_in_basket_1]
+cameras:
+  observation.images.camera_top:
+    intrinsic:
+    - [626.0025, 0, 320]
+    - [0, 626.0025, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.8126, 0.5799, -0.0573, 0.1418]
+    - [0.3639, -0.5818, -0.7274, -0.1358]
+    - [-0.4552, 0.5702, -0.6839, 1.5654]
+    - [0, 0, 0, 1]

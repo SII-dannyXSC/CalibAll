@@ -81,6 +81,7 @@ class Refinement:
 
         if mask is None:    
             mask = self.sam3_extractor.extract_masks(video[mask_id])
+            print(mask)
         mask_tensor = self._prepare_mask_tensor(mask)
 
         dps = {

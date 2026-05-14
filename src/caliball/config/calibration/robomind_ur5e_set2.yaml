@@ -1,0 +1,16 @@
+dataset: robomind/ur_1rgb
+tasks: [triangle_bread_in_basket, red_pepper_on_table, red_pepper_in_basket, triangle_bread_in_basket_1,
+  triangle_bread_on_table, yellow_pepper_in_basket, yellow_pepper_in_basket_1, yellow_pepper_on_table,
+  red_pepper_in_basket, put_egg_in_pot, pick_up_egg, green_pepper_on_table, green_pepper_in_basket_1,
+  green_pepper_in_basket, bread_on_table, bread_in_basket_old]
+cameras:
+  observation.images.camera_top:
+    intrinsic:
+    - [637.6551, 0, 320]
+    - [0, 637.6551, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.7364, 0.647, -0.1978, 0.4419]
+    - [0.3284, -0.5973, -0.7317, -0.1494]
+    - [-0.5915, 0.4739, -0.6523, 1.5198]
+    - [0, 0, 0, 1]

@@ -1,5 +1,6 @@
 from PIL import Image
 import cv2
+import numpy as np
 import os
 import time
 
@@ -68,9 +69,9 @@ class CoarseInit:
             self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
 
         K = self._get_intrinsic(img_pil)
-        hom = self.robot_tf.fkine_eef(joint_angles)
+        hom = np.array([self.robot_tf.fkine_eef(q)[0] for q in joint_angles])  # (T, 4, 4)
         if hom.ndim == 4:
-            # 双臂 (N, 2, 4, 4)：默认用左臂 TCP 与单点 2D 跟踪对齐
+            # 双臂 (T, 2, 4, 4)：默认用左臂 TCP 与单点 2D 跟踪对齐
             hom = hom[:, 0, ...]
         points_3d = hom[:, :3, 3]
         extrinsic = self.pnp_solver(

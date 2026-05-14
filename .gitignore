@@ -231,8 +231,11 @@ result
 
 # Temporary and tool-specific
 tmp/
-third_party
+third_party/*
+!third_party/urdf/
 .claude/
 .sii/
 .claudeignore
 .cursorignore
+.brainstorm-state
+brainstorm-*.md

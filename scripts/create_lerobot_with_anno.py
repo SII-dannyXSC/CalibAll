@@ -3,21 +3,22 @@
 create_lerobot_with_anno.py
 
 通过 YAML config 运行标注流水线，创建新的 lerobot 格式数据集：
-  - data/chunk-*/episode_*.parquet  alignment 列 + annotation 列（无 state/action/video）
+  - data/chunk-*/episode_*.parquet  alignment 列 + annotation 列
   - meta/                           从原始复制 + info.json 更新 features
   - videos/                         symlink 到原始视频文件
+
+默认只含 annotation 列；加 --include_original 可将原始 state/action 等列一并复制。
 
 用法：
     python scripts/create_lerobot_with_anno.py \\
         --config src/caliball/config/ucsd_kitchen.yaml \\
         --output_dir /tmp/ucsd_kitchen_anno
 
-    # 批量覆盖路径（同 label_from_config.py）
+    # 包含原始数据集的 state/action 列
     python scripts/create_lerobot_with_anno.py \\
-        --config src/caliball/config/robomind_aloha.yaml \\
-        --base_path /data/RoboMIND/benchmark1_0/agilex_3rgb \\
-        --dataset_name 3_eggplantoven \\
-        --output_dir /tmp/aloha_anno
+        --config src/caliball/config/ucsd_kitchen.yaml \\
+        --output_dir /tmp/ucsd_kitchen_anno \\
+        --include_original
 
     # 断点续标
     python scripts/create_lerobot_with_anno.py ... --resume
@@ -225,6 +226,7 @@ def write_meta(
     align_cols_present: List[str],
     episode_stats_list: List[dict],
     n_episodes: Optional[int] = None,
+    include_original: bool = False,
 ) -> None:
     meta_out = output_dir / "meta"
     meta_out.mkdir(exist_ok=True)
@@ -238,10 +240,14 @@ def write_meta(
     # info.json: alignment features (lerobot load_info format) + annotation features
     orig_info = json.loads((orig_root / "meta" / "info.json").read_text())
     new_feats: dict = {}
-    # 保留原始 video/image 类型的 feature（含 fps、codec 等元信息）
-    for col, feat in orig_info.get("features", {}).items():
-        if feat.get("dtype") in ("video", "image"):
-            new_feats[col] = feat
+    if include_original:
+        # Keep all original features
+        new_feats.update(orig_info.get("features", {}))
+    else:
+        # Only keep video/image type features
+        for col, feat in orig_info.get("features", {}).items():
+            if feat.get("dtype") in ("video", "image"):
+                new_feats[col] = feat
     for col in align_cols_present:
         if col in _ALIGN_INFO_SCHEMA:
             new_feats[col] = _ALIGN_INFO_SCHEMA[col]
@@ -303,6 +309,8 @@ def parse_args():
     p.add_argument("--skip_mask",    action="store_true")
     p.add_argument("--arm_mesh_num", type=int, default=None)
     p.add_argument("--resume",       action="store_true", help="跳过已存在的 parquet")
+    p.add_argument("--include_original", action="store_true",
+                   help="将原始数据集的 state/action 等列也复制到新数据集（默认只含 annotation）")
     return p.parse_args()
 
 
@@ -369,6 +377,12 @@ def main():
     orig_schema = pq.read_schema(sample_pq_path)
     align_cols_present = [c for c in ALIGN_COLS if c in orig_schema.names]
 
+    # If --include_original, copy all non-video columns from original parquet
+    if args.include_original:
+        orig_copy_cols = [c for c in orig_schema.names if not c.startswith("annotation")]
+    else:
+        orig_copy_cols = align_cols_present
+
     # Load meshes
     if not skip_mask:
         print("[INFO] 加载 robot mesh_paths...")
@@ -403,9 +417,9 @@ def main():
             print(f"[WARN] episode {ep_idx} 缺少 states，跳过")
             continue
 
-        # Read alignment columns from original parquet
+        # Read columns from original parquet
         orig_pq = orig_root / dataset.lerobot_ds.meta.get_data_file_path(ep_idx)
-        align_table = pq.read_table(orig_pq, columns=align_cols_present)
+        align_table = pq.read_table(orig_pq, columns=orig_copy_cols)
 
         # Run labeling
         label_data = LabelData(
@@ -482,7 +496,8 @@ def main():
 
     # Write meta
     write_meta(output_dir, orig_root, sample_ann_cols, align_cols_present,
-               episode_stats_list, n_episodes=len(processed_eps))
+               episode_stats_list, n_episodes=len(processed_eps),
+               include_original=args.include_original)
 
     # Write calibration.json
     calib: dict = {}

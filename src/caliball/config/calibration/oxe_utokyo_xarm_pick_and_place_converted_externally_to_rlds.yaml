@@ -1,0 +1,12 @@
+dataset: utokyo_xarm_pick_and_place_converted_externally_to_rlds
+cameras:
+  default:
+    intrinsic:
+    - [219.296, 0, 112]
+    - [0, 219.296, 112]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.1472, 0.9887, -0.0292, -0.0768]
+    - [0.5752, -0.1096, -0.8107, 0.0077]
+    - [-0.8047, 0.1025, -0.5848, 1.0566]
+    - [0, 0, 0, 1]

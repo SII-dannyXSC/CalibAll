@@ -1,0 +1,638 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot name="arx5_dual_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <!-- <link name="footprint"/> -->
+
+    <!-- <xacro:include filename="$(find tracer_description)/urdf/tracer_v1.xacro"/> -->
+    <!-- <xacro:include filename="$(find realsense2_description)/urdf/_d435.xacro"/> -->
+
+    <link name="footprint">
+    </link>
+    <!--***************************** front-left ****************************** -->
+    <link name="fl_base_link">
+        <inertial>
+            <origin xyz="-3.77960552443097E-05 6.79413834922362E-05 0.0272675975957773" rpy="0 0 0" />
+            <mass value="0.155112526591278" />
+            <inertia ixx="7.60347373757683E-05" ixy="1.31363578468253E-07" ixz="1.65990805634842E-07" iyy="7.64176389864096E-05" iyz="-2.98381448658278E-07" izz="6.94914158355665E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/base_arm.dae" />
+            </geometry>
+            <!-- <material name="black">
+                <color rgba="0.05 0.05 0.05 0.98" />
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/base_arm.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_base_joint" type="fixed">
+        <origin xyz="0.2305 0.297 0.782" rpy="0.0 0.0 0.02" />
+        <parent link="footprint" />
+        <child link="fl_base_link" />
+        <axis xyz="0.0 0.0 1.0" />
+    </joint>
+    
+    <link name="fl_link1">
+        <inertial>
+            <origin xyz="0.00625345254733769 -0.024776724575416 0.0152204909116542" rpy="0 0 0" />
+            <mass value="0.0216291264377367" />
+            <inertia
+                ixx="1.15756471313396E-05"
+                ixy="1.63728784702967E-06"
+                ixz="-2.73767909517805E-06"
+                iyy="9.54605859943272E-06"
+                iyz="3.01605409074901E-06"
+                izz="1.06781021447089E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link1.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link1.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint1" type="revolute">
+        <origin xyz="0 0 0.058" rpy="0 0 0" />
+        <parent link="fl_base_link" />
+        <child link="fl_link1" />
+        <axis xyz="0 0 1" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link name="fl_link2">
+        <inertial>
+            <origin xyz="-0.0751817740450955 3.45134309138919E-06 -4.55690287344823E-05" rpy="0 0 0" />
+            <mass value="0.317040634327494" />
+            <inertia
+                ixx="0.000148622978788109"
+                ixy="7.9939701538228E-06"
+                ixz="2.11594522192149E-06"
+                iyy="0.000646291918352959"
+                iyz="-1.99305353242084E-08"
+                izz="0.000613128041834933" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link2.dae" />
+            </geometry>
+            <!-- <material name="black">
+                
+            </material> -->
+        </visual>
+        <collision>
+        <origin  xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <mesh filename="aloha_maniskill_sim/meshes/link2.STL" />
+        </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint2" type="revolute">
+        <origin xyz="0.025013 0.00060169 0.042" rpy="0 0 0" />
+        <parent link="fl_link1" />
+        <child link="fl_link2" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link name="fl_link3">
+        <inertial>
+            <origin xyz="0.0958977122336034 -8.54798924280289E-05 -0.0389029227802006" rpy="0 0 0" />
+            <mass value="0.475179901151789" />
+            <inertia
+                ixx="0.000245797731408424"
+                ixy="-1.18756934981885E-06"
+                ixz="-3.08627546217305E-07"
+                iyy="0.000848596965773723"
+                iyz="2.1655980060709E-07"
+                izz="0.00073290848648715" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link3.dae" />
+            </geometry>
+            <!-- <material name="white">
+                <color rgba="0.752 0.7529 0.7529 1" />
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link3.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint3" type="revolute">
+        <origin xyz="-0.26396 0.0044548 0" rpy="-3.1416 0 -0.015928" />
+        <parent link="fl_link2" />
+        <child link="fl_link3" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+        <link name="fl_link4">
+        <inertial>
+            <origin xyz="0.0591385266744759 0.00278044811499105 -0.0552291926495377" rpy="0 0 0" />
+            <mass value="0.138133633872797" />
+            <inertia
+                ixx="5.6812931750694E-05"
+                ixy="3.18564570369191E-06"
+                ixz="3.31187610383292E-06"
+                iyy="5.56751697137782E-05"
+                iyz="-2.13897740775086E-06"
+                izz="6.42957251144152E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link4.dae" />
+            </geometry>
+            <!-- <material name="black">
+            
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link4.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint4" type="revolute">
+        <origin xyz="0.246 -0.00025 -0.06" rpy="0 0 0" />
+        <parent link="fl_link3" />
+        <child link="fl_link4" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+        <link name="fl_link5">
+        <inertial>
+            <origin xyz="0.00870303426445659 -2.87406901246252E-05 0.0817957433312705" rpy="0 0 0" />
+            <mass value="0.126741777607625" />
+            <inertia
+                ixx="5.2870226427243E-05"
+                ixy="-3.41758559092594E-08"
+                ixz="1.05281937338646E-06"
+                iyy="4.14245046680039E-05"
+                iyz="-7.47381113966083E-08"
+                izz="4.46265559731496E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link5.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link5.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint5" type="revolute">
+        <origin xyz="0.06775 0.0015 -0.0855" rpy="0 0 -0.015928" />
+        <parent link="fl_link4" />
+        <child link="fl_link5" />
+        <axis xyz="0 0 1" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+        <link name="fl_link6">
+        <inertial>
+            <origin xyz="0.038317562848284 -4.45000434657139E-05 0.00355875192843721" rpy="0 0 0" />
+            <mass value="0.142880100739169" />
+            <inertia
+                ixx="9.84190386012445E-05"
+                ixy="9.90777828593097E-08"
+                ixz="2.38841662850396E-07"
+                iyy="3.95328645641678E-05"
+                iyz="2.8992956673539E-07"
+                izz="8.4711562610471E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link6.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link6.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint6" type="revolute">
+        <origin xyz="0.03095 0 0.0855" rpy="-3.1416 0 0" />
+        <parent link="fl_link5" />
+        <child link="fl_link6" />
+        <axis xyz="1 0 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link name="fl_link7">
+        <inertial>
+            <origin xyz="0.00626222055030923 -0.00713411663149576 -0.00289898514345116" rpy="0 0 0" />
+            <mass value="0.0264779585598598" />
+            <inertia
+                ixx="8.79642526953154E-06"
+                ixy="3.0244685599285E-06"
+                ixz="-5.99353466596085E-07"
+                iyy="1.48519274221679E-05"
+                iyz="1.31550651321036E-07"
+                izz="1.1114142640444E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link7.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link7.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint7" type="prismatic">
+        <origin xyz="0.08457 0.024493 -0.00010349" rpy="0 0 0" />
+        <parent link="fl_link6" />
+        <child link="fl_link7" />
+        <axis xyz="0 1 0" />
+        <limit lower="0" upper="0.04765" effort="100" velocity="1000" />
+    </joint>
+    <link name="fl_link8">
+        <inertial>
+            <origin xyz="0.00626222057480438 0.00713411644936678 0.00145300478837504" rpy="0 0 0" />
+            <mass value="0.0264779581346586" />
+            <inertia
+                ixx="9.01311523396113E-06"
+                ixy="-3.02446856817399E-06"
+                ixz="1.52593574709739E-06"
+                iyy="1.50686174477573E-05"
+                iyz="5.73251417689975E-07"
+                izz="1.11141426397578E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link8.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <mesh filename="aloha_maniskill_sim/meshes/link8.STL" />
+        </geometry>
+        </collision>
+    </link>
+    <joint name="fl_joint8" type="prismatic">
+        <origin xyz="0.08457 -0.024496 -0.00010354" rpy="0 0 0" />
+        <parent link="fl_link6" />
+        <child link="fl_link8" />
+        <axis xyz="0 -1 0" />
+        <limit lower="0" upper="0.04765" effort="100" velocity="1000" />
+    </joint>
+    <!--***************************** front-right ****************************** -->
+    <!--***************************** front-right ****************************** -->
+    <link name="fr_base_link">
+        <inertial>
+            <origin xyz="-3.77960552443097E-05 6.79413834922362E-05 0.0272675975957773" rpy="0 0 0" />
+            <mass value="0.155112526591278" />
+            <inertia ixx="7.60347373757683E-05" ixy="1.31363578468253E-07" ixz="1.65990805634842E-07" iyy="7.64176389864096E-05" iyz="-2.98381448658278E-07" izz="6.94914158355665E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/base_arm.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/base_arm.STL" />
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="fr_base_joint" type="fixed">
+        <origin xyz="0.2315 -0.3063 0.781" rpy="0.0 0.0 0.01" />
+        <parent link="footprint" />
+        <child link="fr_base_link" />
+        <axis xyz="0.0 0.0 1.0" />
+    </joint>
+    
+  <link name="fr_link1">
+        <inertial>
+            <origin xyz="0.00625345254733769 -0.024776724575416 0.0152204909116542" rpy="0 0 0" />
+            <mass value="0.0216291264377367" />
+            <inertia
+                ixx="1.15756471313396E-05"
+                ixy="1.63728784702967E-06"
+                ixz="-2.73767909517805E-06"
+                iyy="9.54605859943272E-06"
+                iyz="3.01605409074901E-06"
+                izz="1.06781021447089E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link1.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link1.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint1" type="revolute">
+        <origin xyz="0 0 0.058" rpy="0 0 0" />
+        <parent link="fr_base_link" />
+        <child link="fr_link1" />
+        <axis xyz="0 0 1" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link
+        name="fr_link2">
+        <inertial>
+            <origin xyz="-0.0751817740450955 3.45134309138919E-06 -4.55690287344823E-05" rpy="0 0 0" />
+            <mass value="0.317040634327494" />
+            <inertia
+                ixx="0.000148622978788109"
+                ixy="7.9939701538228E-06"
+                ixz="2.11594522192149E-06"
+                iyy="0.000646291918352959"
+                iyz="-1.99305353242084E-08"
+                izz="0.000613128041834933" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link2.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link2.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint2" type="revolute">
+        <origin xyz="0.025013 0.00060169 0.042" rpy="0 0 0" />
+        <parent link="fr_link1" />
+        <child link="fr_link2" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link
+        name="fr_link3">
+        <inertial>
+            <origin xyz="0.0958977122336034 -8.54798924280289E-05 -0.0389029227802006" rpy="0 0 0" />
+            <mass value="0.475179901151789" />
+            <inertia
+                ixx="0.000245797731408424"
+                ixy="-1.18756934981885E-06"
+                ixz="-3.08627546217305E-07"
+                iyy="0.000848596965773723"
+                iyz="2.1655980060709E-07"
+                izz="0.00073290848648715" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link3.dae" />
+            </geometry>
+            <!-- <material name="white">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link3.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint3" type="revolute">
+        <origin xyz="-0.26396 0.0044548 0" rpy="-3.1416 0 -0.015928" />
+        <parent link="fr_link2" />
+        <child link="fr_link3" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link
+        name="fr_link4">
+        <inertial>
+            <origin xyz="0.0591385266744759 0.00278044811499105 -0.0552291926495377" rpy="0 0 0" />
+            <mass value="0.138133633872797" />
+            <inertia
+                ixx="5.6812931750694E-05"
+                ixy="3.18564570369191E-06"
+                ixz="3.31187610383292E-06"
+                iyy="5.56751697137782E-05"
+                iyz="-2.13897740775086E-06"
+                izz="6.42957251144152E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link4.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link4.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint4" type="revolute">
+        <origin xyz="0.246 -0.00025 -0.06" rpy="0 0 0" />
+        <parent link="fr_link3" />
+        <child link="fr_link4" />
+        <axis xyz="0 1 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link
+        name="fr_link5">
+        <inertial>
+            <origin xyz="0.00870303426445659 -2.87406901246252E-05 0.0817957433312705" rpy="0 0 0" />
+            <mass value="0.126741777607625" />
+            <inertia
+                ixx="5.2870226427243E-05"
+                ixy="-3.41758559092594E-08"
+                ixz="1.05281937338646E-06"
+                iyy="4.14245046680039E-05"
+                iyz="-7.47381113966083E-08"
+                izz="4.46265559731496E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link5.dae" />
+            </geometry>
+            <!-- <material name="black">
+
+            </material> -->
+        </visual>
+        <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <mesh filename="aloha_maniskill_sim/meshes/link5.STL" />
+        </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint5" type="revolute">
+        <origin xyz="0.06775 0.0015 -0.0855" rpy="0 0 -0.015928" />
+        <parent link="fr_link4" />
+        <child link="fr_link5" />
+        <axis xyz="0 0 1" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link name="fr_link6">
+        <inertial>
+            <origin xyz="0.038317562848284 -4.45000434657139E-05 0.00355875192843721" rpy="0 0 0" />
+            <mass value="0.142880100739169" />
+            <inertia
+                ixx="9.84190386012445E-05"
+                ixy="9.90777828593097E-08"
+                ixz="2.38841662850396E-07"
+                iyy="3.95328645641678E-05"
+                iyz="2.8992956673539E-07"
+                izz="8.4711562610471E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link6.dae" />
+            </geometry>
+            <!-- <material name="black">
+            </material> -->
+        </visual>
+        <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+            <mesh filename="aloha_maniskill_sim/meshes/link6.STL" />
+        </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint6" type="revolute">
+        <origin xyz="0.03095 0 0.0855" rpy="-3.1416 0 0" />
+        <parent link="fr_link5" />
+        <child link="fr_link6" />
+        <axis xyz="1 0 0" />
+        <limit lower="-10" upper="10" effort="100" velocity="1000" />
+    </joint>
+    <link name="fr_link7">
+        <inertial>
+            <origin xyz="0.00626222055030923 -0.00713411663149576 -0.00289898514345116" rpy="0 0 0" />
+            <mass value="0.0264779585598598" />
+            <inertia
+                ixx="8.79642526953154E-06"
+                ixy="3.0244685599285E-06"
+                ixz="-5.99353466596085E-07"
+                iyy="1.48519274221679E-05"
+                iyz="1.31550651321036E-07"
+                izz="1.1114142640444E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link7.dae" />
+            </geometry>
+            <!-- <material name="black">
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link7.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint7" type="prismatic">
+        <origin xyz="0.08457 0.024493 -0.00010349" rpy="0 0 0" />
+        <parent link="fr_link6" />
+        <child link="fr_link7" />
+        <axis xyz="0 1 0" />
+        <limit lower="0" upper="0.04765" effort="100" velocity="1000" />
+    </joint>
+    <link name="fr_link8">
+        <inertial>
+            <origin xyz="0.00626222057480438 0.00713411644936678 0.00145300478837504" rpy="0 0 0" />
+            <mass value="0.0264779581346586" />
+            <inertia
+                ixx="9.01311523396113E-06"
+                ixy="-3.02446856817399E-06"
+                ixz="1.52593574709739E-06"
+                iyy="1.50686174477573E-05"
+                iyz="5.73251417689975E-07"
+                izz="1.11141426397578E-05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link8.dae" />
+            </geometry>
+            <!-- <material name="black">
+            </material> -->
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="aloha_maniskill_sim/meshes/link8.STL" />
+            </geometry>
+        </collision>
+    </link>
+    <joint name="fr_joint8" type="prismatic">
+        <origin xyz="0.08457 -0.024496 -0.00010354" rpy="0 0 0" />
+        <parent link="fr_link6" />
+        <child link="fr_link8" />
+        <axis xyz="0 -1 0" />
+        <limit lower="0" upper="0.04765" effort="100" velocity="1000" />
+    </joint>
+    <!--***************************** left-rear ****************************** -->
+
+</robot>

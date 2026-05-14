@@ -1,0 +1,12 @@
+dataset: kaist_nonprehensile_converted_externally_to_rlds
+cameras:
+  default:
+    intrinsic:
+    - [523.096, 0, 320]
+    - [0, 523.096, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.6252, 0.7761, 0.0824, -0.3496]
+    - [0.5018, -0.3189, -0.804, -0.3243]
+    - [-0.5978, 0.544, -0.5888, 0.8719]
+    - [0, 0, 0, 1]

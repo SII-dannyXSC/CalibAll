@@ -45,6 +45,13 @@ def parse_args():
         default="test_from_config.ply",
         help="输出点云 PLY 路径",
     )
+    p.add_argument(
+        "--joints",
+        type=float,
+        nargs="+",
+        default=None,
+        help="关节角度列表（弧度），如 --joints 0 0.5 -0.3 0 0 0 0 0.04",
+    )
     return p.parse_args()
 
 
@@ -60,7 +67,12 @@ def main():
     robot_config = cfg.robot
     mesh_paths = robot_config.mesh_paths
 
-    state = default_state_for_tf(tf)
+    if args.joints is not None:
+        state = np.array(args.joints, dtype=np.float64).reshape(1, -1)
+        print(f"  joints: {args.joints}")
+    else:
+        state = default_state_for_tf(tf)
+        print(f"  joints: default (zeros + gripper closed)")
     tf_list = tf.fkine_all(state)[0]
 
     all_points = []

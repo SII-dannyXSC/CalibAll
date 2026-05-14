@@ -1,0 +1,36 @@
+dataset: robomind/franka_3rgb
+tasks: [piled_on_yellow_block_on_purple_block, place_in_bread_in_basket_1, place_in_bread_in_bread_machine,
+  place_in_bread_on_table_1, place_in_fruit_in_fruit_basket, place_in_purple_block_in_plate,
+  place_in_purple_block_on_table, place_in_take_bread_and_put_in_plate, place_in_yellow_block_on_table,
+  twist_knob_start_bread_machine]
+cameras:
+  observation.images.camera_top:
+    intrinsic:
+    - [813.46466, 0, 640]
+    - [0, 813.46466, 360]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.0664, 0.9978, 0.0071, -0.1501]
+    - [0.8719, -0.0546, -0.4866, -0.5044]
+    - [-0.4852, 0.0386, -0.8736, 1.3062]
+    - [0, 0, 0, 1]
+  observation.images.camera_left:
+    intrinsic:
+    - [565.8554, 0, 320]
+    - [0, 565.8554, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [-0.8823, -0.4702, -0.0181, 0.5778]
+    - [-0.1968, 0.4038, -0.8934, 0.4902]
+    - [0.4275, -0.7847, -0.4488, 0.8107]
+    - [0, 0, 0, 1]
+  observation.images.camera_right:
+    intrinsic:
+    - [582.68304, 0, 320]
+    - [0, 582.68304, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.7015, -0.6757, -0.2266, -0.4034]
+    - [-0.5197, -0.2674, -0.8114, 0.7152]
+    - [0.4877, 0.687, -0.5387, 0.7601]
+    - [0, 0, 0, 1]

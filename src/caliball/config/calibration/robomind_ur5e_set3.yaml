@@ -1,0 +1,18 @@
+dataset: robomind/ur_1rgb
+tasks: [green_pepper_on_plate, green_pepper_on_the_table, pick_up_green_pepper_from_plate,
+  pick_up_green_pepper_from_table, pick_up_red_pepper_from_plate, pick_up_red_pepper_from_table,
+  pick_up_yellow_pepper_from_plate, pick_up_yellow_pepper_from_plate_copy_1734079773826,
+  pick_up_yellow_pepper_from_table, pick_up_yellow_pepper_from_table_copy_1734079574938,
+  pickupthebananafromtheplate, pickupthebananafromthetable, placebananaonaplate, putthebananaonthetable,
+  red_pepper_in_table, red_pepper_on_plate, yellow_pepper_on_plate, yellow_pepper_on_plate_copy_1734079761061]
+cameras:
+  observation.images.camera_top:
+    intrinsic:
+    - [626.78735, 0, 320]
+    - [0, 626.78735, 240]
+    - [0, 0, 1]
+    extrinsic:
+    - [0.9466, 0.2998, 0.1184, -0.0695]
+    - [0.315, -0.7824, -0.5372, -0.4109]
+    - [-0.0684, 0.5459, -0.8351, 1.4191]
+    - [0, 0, 0, 1]
