@@ -71,18 +71,23 @@ class Refinement:
 
         return result, loss_dict
 
-    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0):
+    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0, progress_callback=None):
         H, W = video.shape[1:3]
+        print(f"[refine] H={H}, W={W}, mask_id={mask_id}")
         extrinsic = self._to_float_tensor(extrinsic)
+        print("[refine] 创建 RBSolver …")
         solver = RBSolver(self.mesh_paths, H, W, extrinsic, device=self.device)
         solver.to(self.device)
+        print("[refine] RBSolver 就绪")
 
         link_poses_list = self._prepare_link_poses(joint_angles[mask_id:mask_id + 1])
+        print("[refine] link_poses 就绪")
 
-        if mask is None:    
+        if mask is None:
             mask = self.sam3_extractor.extract_masks(video[mask_id])
             print(mask)
         mask_tensor = self._prepare_mask_tensor(mask)
+        print(f"[refine] mask_tensor shape={mask_tensor.shape}, 开始迭代")
 
         dps = {
             "global_step": 0,
@@ -99,7 +104,11 @@ class Refinement:
 
         os.makedirs(base_path, exist_ok=True)
         for k in range(max_steps):
+            if k == 0:
+                print("[refine] 第一次 forward …")
             output, loss_dict = solver.forward(dps)
+            if k == 0:
+                print("[refine] 第一次 forward 完成")
             loss = loss_dict["mask_loss"]
             loss.backward()
             pose_optimizer.step()
@@ -140,4 +149,8 @@ class Refinement:
                 overlay = add_mask(cur_rgb, mask_render, color=color, alpha=0.5)
                 cv2.imwrite(os.path.join(save_path, f'output_with_mask_{idx}.png'), overlay)
                 cv2.imwrite(os.path.join(pred_mask_path, f'{k}.png'), overlay)
+
+                if progress_callback is not None:
+                    progress_callback(step=k, max_steps=max_steps, loss=float(loss),
+                                      overlay=overlay[:, :, ::-1])  # BGR → RGB
         return output, loss_dict     

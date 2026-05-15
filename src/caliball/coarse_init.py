@@ -56,7 +56,8 @@ class CoarseInit:
         return self._intrinsic
 
     def get_extrinsic(self, video, joint_angles, tracking_point=None, img_idx=0,
-                      method=cv2.SOLVEPNP_EPNP, save_path=None, init_w2c=None):
+                      method=cv2.SOLVEPNP_EPNP, save_path=None, init_w2c=None,
+                      return_details=False):
         img_pil = Image.fromarray(video[img_idx])
 
         if tracking_point is not None:
@@ -78,4 +79,6 @@ class CoarseInit:
             points_3d=points_3d, points_2d=points_2d,
             camera_matrix=K, method=method, init_w2c=init_w2c,
         )
+        if return_details:
+            return extrinsic, K, {"points_2d": points_2d, "points_3d": points_3d}
         return extrinsic, K

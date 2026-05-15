@@ -40,7 +40,7 @@ if _sam3_root.is_dir() and str(_sam3_root) not in sys.path:
     sys.path.insert(0, str(_sam3_root))
 
 from src.caliball.dataset.lerobot_dataset import LeRobotDataset
-from src.caliball.utils.web_interaction import pick_tracking_point_web, run_sam3_points_web
+from src.caliball.utils.web_interaction import run_unified_web
 
 
 def ensure_dir(path: Path | str) -> Path:
@@ -112,16 +112,16 @@ def json_serialize(v: Any) -> Any:
 
 def parse_args():
     p = argparse.ArgumentParser(description="外参检测：Web 交互选点 + SAM3 mask，写 manual_label")
-    p.add_argument("--task-path", type=str, required=True, help="LeRobot 数据集根目录（本地路径）")
+    p.add_argument("--task-path", type=str, default=None, help="LeRobot 数据集根目录（--config 模式可省略）")
     p.add_argument("--task-name", type=str, default=None, help="默认 os.path.basename(task-path)")
-    p.add_argument("--dataset-name", type=str, required=True)
-    p.add_argument("--camera-name", type=str, required=True, help="如 observation.images.camera_top")
+    p.add_argument("--dataset-name", type=str, default=None)
+    p.add_argument("--camera-name", type=str, default=None, help="如 observation.images.camera_top")
     p.add_argument("--robot-type", type=str, default="ur5e")
     p.add_argument("--episode-idx", type=int, default=0)
     p.add_argument("--strike", type=int, default=4)
     p.add_argument("--start-idx", type=int, default=0)
     p.add_argument("--end-idx", type=int, default=39)
-    p.add_argument("--mask-frame-idx", type=int, default=35)
+    p.add_argument("--mask-frame-idx", type=int, default=None, help="mask 参考帧索引，默认为 start-idx（第一帧）")
     p.add_argument(
         "--state-key",
         type=str,
@@ -145,6 +145,8 @@ def parse_args():
     p.add_argument("--host", type=str, default="127.0.0.1", help="监听地址；远程可用 0.0.0.0 + SSH 转发")
     p.add_argument("--tracking-port", type=int, default=8765)
     p.add_argument("--sam-port", type=int, default=8766)
+    p.add_argument("--max-steps", type=int, default=3000, help="Refinement 最大迭代步数")
+    p.add_argument("--config", type=str, default=None, help="从已有的 config.json 加载标注参数，跳过 web 交互直接运行 pipeline")
     p.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     p.add_argument(
         "--tracking-x",
@@ -164,6 +166,32 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    # ── 从 JSON config 加载参数（如果提供） ──
+    if args.config:
+        with open(args.config, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        args.task_path = args.task_path or cfg["task_path"]
+        args.task_name = args.task_name or cfg.get("task_name")
+        args.dataset_name = cfg.get("dataset_name", args.dataset_name)
+        args.camera_name = cfg.get("camera_name", args.camera_name)
+        args.robot_type = cfg.get("robot_type", args.robot_type)
+        args.episode_idx = cfg.get("episode_idx", args.episode_idx)
+        args.strike = cfg.get("strike", args.strike)
+        args.start_idx = cfg.get("start_idx", args.start_idx)
+        args.end_idx = cfg.get("end_idx", args.end_idx)
+        args.mask_frame_idx = cfg.get("mask_frame_idx", args.mask_frame_idx)
+        if "tracking_point" in cfg and cfg["tracking_point"]:
+            args.tracking_x = cfg["tracking_point"][0]
+            args.tracking_y = cfg["tracking_point"][1]
+        if "mask_save_path" in cfg:
+            args.mask_npy = args.mask_npy or cfg["mask_save_path"]
+        args.state_key = cfg.get("state_key", args.state_key)
+        print(f"从 config 加载参数: {args.config}")
+
+    if not args.task_path or not args.dataset_name or not args.camera_name:
+        raise SystemExit("需要 --task-path, --dataset-name, --camera-name（或使用 --config）")
+
     task_path = args.task_path
     task_name = args.task_name or Path(task_path).name
     camera_key = args.camera_name
@@ -234,52 +262,201 @@ def main():
         print("本次仅导出图片；请再次运行同一命令以进行选点、SAM 与保存 manual_label。")
         sys.exit(0)
 
+    # ── 确定默认值 ──
     start_idx = int(args.start_idx)
     end_idx = int(args.end_idx)
-    if not (0 <= start_idx < len(video)):
-        raise SystemExit(f"start_idx={start_idx} 越界，len(video)={len(video)}")
-    if not (start_idx < end_idx < len(video)):
-        raise SystemExit(f"需要 start_idx < end_idx < len(video)，当前 {start_idx=} {end_idx=} len={len(video)}")
+    mask_frame_idx = int(args.mask_frame_idx) if args.mask_frame_idx is not None else start_idx
 
-    clip = video[start_idx : end_idx + 1]
-    clip_joint = joint_angles[start_idx : end_idx + 1]
-    print("clip shape =", clip.shape, "clip_joint =", clip_joint.shape)
-
+    default_tracking = None
     if args.tracking_x is not None and args.tracking_y is not None:
-        CONFIG["tracking_point"] = [float(args.tracking_x), float(args.tracking_y)]
-        print("tracking_point (CLI) =", CONFIG["tracking_point"])
-    else:
-        print(f"请在浏览器打开 tracking 页面（若未自动打开则访问 http://{args.host}:{args.tracking_port}/）")
-        tx, ty = pick_tracking_point_web(
-            clip[0],
-            host=args.host,
-            port=args.tracking_port,
-            open_browser=not args.no_browser,
-        )
-        CONFIG["tracking_point"] = [float(tx), float(ty)]
-        print("tracking_point (web) =", CONFIG["tracking_point"])
+        default_tracking = (float(args.tracking_x), float(args.tracking_y))
 
-    mask_frame_idx = int(args.mask_frame_idx)
-    if mask_frame_idx < start_idx or mask_frame_idx > end_idx:
-        print(f"mask_frame_idx={mask_frame_idx} 不在 [{start_idx}, {end_idx}]，改为 start_idx")
-        mask_frame_idx = start_idx
-        CONFIG["mask_frame_idx"] = mask_frame_idx
-
-    mask_output_dir = ensure_dir(
-        result_dir / task_name / f"ep_{args.episode_idx:06d}" / "masks"
-    )
-    result_mask_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}.npy"
-    result_overlay_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}_overlay.png"
-
-    tgt_mask_img = video[mask_frame_idx]
-    tgt_mask_pil = Image.fromarray(np.asarray(tgt_mask_img))
-
+    default_mask = None
     if args.mask_npy:
-        mask = np.load(args.mask_npy)
-        if mask.dtype != np.uint8:
-            mask = mask.astype(np.uint8)
-        print("已加载 mask:", args.mask_npy, mask.shape)
+        default_mask = np.load(args.mask_npy)
+        if default_mask.dtype != np.uint8:
+            default_mask = default_mask.astype(np.uint8)
+        print("已加载默认 mask:", args.mask_npy)
+
+    # ── 预加载所有 Pipeline 模型（标注期间模型已就绪） ──
+    from omegaconf import OmegaConf
+    from src.caliball.coarse_init import CoarseInit
+    from src.caliball.refinement import Refinement
+
+    model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
+    model_config.robot_type = args.robot_type
+
+    print("加载 CoarseInit（DINOv2 + CoTracker）…")
+    _coarse_init = CoarseInit(config=model_config)
+    _coarse_init.to(args.device)
+
+    print("加载 Refinement…")
+    _refinement_init = Refinement(config=model_config)
+    print("所有模型已加载")
+
+    # ── 构造 Pipeline 函数（config 模式与 web 模式共享） ──
+    def pipeline_fn(annotate_result, update_fn):
+        """标注完成后运行 tracking → coarse → refine，通过 update_fn 报告进度。"""
+
+        def _log_update(state):
+            """同时更新 web 页面 + 终端 print。"""
+            msg = state.get("message", "")
+            stage = state.get("stage", "")
+            print(f"[pipeline] [{stage}] {msg}")
+            update_fn(state)
+
+        s, e = annotate_result["start"], annotate_result["end"]
+        mask_ref = annotate_result["mask_ref"]
+        tp = list(annotate_result["tracking_point"])
+        msk = annotate_result["mask"]
+
+        clip = video[s : e + 1]
+        clip_joint = joint_angles[s : e + 1]
+        mask_id = mask_ref - s
+        print(f"[pipeline] clip: [{s}, {e}], mask_ref={mask_ref}, mask_id={mask_id}, tracking={tp}")
+
+        pipe_save = ensure_dir(result_dir / task_name / f"ep_{args.episode_idx:06d}" / "pipeline")
+        print(f"[pipeline] save_path: {pipe_save}")
+
+        # 检查机型是否变更
+        selected_robot = annotate_result.get("robot_type", args.robot_type)
+        if selected_robot != args.robot_type:
+            _log_update({"stage": "tracking", "message": f"机型变更为 {selected_robot}，重新加载…"})
+            cfg2 = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
+            cfg2.robot_type = selected_robot
+            coarse = CoarseInit(config=cfg2)
+            coarse.to(args.device)
+            refinement = Refinement(config=cfg2)
+        else:
+            coarse = _coarse_init
+            refinement = _refinement_init
+
+        # Stage 1: Tracking + Coarse
+        _log_update({"stage": "tracking", "message": "正在追踪…"})
+        extrinsic, K, details = coarse.get_extrinsic(
+            video=clip, joint_angles=clip_joint,
+            tracking_point=tp, img_idx=0,
+            save_path=str(pipe_save), return_details=True,
+        )
+        print(f"[pipeline] coarse extrinsic:\n{extrinsic}")
+        print(f"[pipeline] intrinsic:\n{K}")
+
+        # Tracking 可视化
+        pts_2d = details["points_2d"]
+        vis = clip[0].copy()
+        for pt in pts_2d:
+            cv2.circle(vis, (int(pt[0]), int(pt[1])), 3, (0, 255, 0), -1)
+        _log_update({"stage": "coarse", "message": "Coarse 外参估计完成", "image": vis})
+
+        # 释放 CoarseInit 显存
+        import torch, gc
+        del coarse
+        gc.collect()
+        torch.cuda.empty_cache()
+        print("[pipeline] 已释放 CoarseInit 显存")
+
+        # Stage 2: Refinement
+        _log_update({"stage": "refine", "message": "开始 Refinement…", "step": 0, "max_steps": args.max_steps})
+        print("[pipeline] 调用 refinement.refine() ...")
+        print(f"[pipeline] clip.shape={clip.shape}, clip_joint.shape={clip_joint.shape}, mask_id={mask_id}, mask.shape={msk.shape if msk is not None else None}")
+
+        def _refine_cb(step, max_steps, loss, overlay):
+            _log_update({
+                "stage": "refine",
+                "message": f"step {step}/{max_steps}  loss={loss:.6f}",
+                "step": step, "max_steps": max_steps,
+                "image": overlay,
+            })
+
+        output, loss_dict = refinement.refine(
+            clip, clip_joint, K, extrinsic, str(pipe_save),
+            mask=msk, mask_id=mask_id, max_steps=args.max_steps,
+            progress_callback=_refine_cb,
+        )
+
+        # 保存 pipeline 结果（refined extrinsic + intrinsic）
+        refined_tsfm = output["tsfm"].detach().cpu().numpy()
+        np.save(str(pipe_save / "extrinsic_coarse.npy"), extrinsic)
+        np.save(str(pipe_save / "extrinsic_refined.npy"), refined_tsfm)
+        np.save(str(pipe_save / "intrinsic.npy"), K)
+        CONFIG.update(
+            extrinsic_coarse_path=str(pipe_save / "extrinsic_coarse.npy"),
+            extrinsic_refined_path=str(pipe_save / "extrinsic_refined.npy"),
+            intrinsic_path=str(pipe_save / "intrinsic.npy"),
+            pipeline_save_path=str(pipe_save),
+        )
+
+        # ── 生成标注可视化视频 ──
+        _log_update({"stage": "done", "message": "生成可视化视频…"})
+        import torch as _torch
+        from src.caliball.pipeline.rendering_optimizer import RBSolver
+        from src.caliball.utils.image import add_mask as _add_mask
+
+        H, W = clip.shape[1:3]
+        vis_solver = RBSolver(refinement.mesh_paths, H, W, refined_tsfm, device=args.device)
+        vis_solver.to(args.device)
+        vis_solver.eval()
+
+        K_t = refinement._to_float_tensor(K).unsqueeze(0)
+
+        anno_path = str(pipe_save / "anno_video.mp4")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        vw = cv2.VideoWriter(anno_path, fourcc, 15, (W, H))
+
+        last_overlay_rgb = None
+        for fi in range(len(clip)):
+            link_poses_i = refinement._prepare_link_poses(clip_joint[fi : fi + 1])
+            dps = {
+                "global_step": 0,
+                "mask": _torch.zeros((1, H, W), device=args.device),
+                "link_poses": link_poses_i,
+                "K": K_t,
+            }
+            with _torch.no_grad():
+                out_v, _ = vis_solver.forward(dps)
+            rmask = out_v["rendered_masks"][0].detach().cpu().numpy()
+            rmask = (rmask > 0).astype(np.uint8)
+            frame_bgr = clip[fi][:, :, ::-1].copy()
+            overlay_bgr = _add_mask(frame_bgr, rmask, color=[0, 255, 0], alpha=0.5)
+            vw.write(overlay_bgr)
+            last_overlay_rgb = overlay_bgr[:, :, ::-1]
+            if fi % 5 == 0:
+                _log_update({"stage": "done", "message": f"可视化 {fi + 1}/{len(clip)}", "image": last_overlay_rgb})
+
+        vw.release()
+        print(f"[pipeline] 标注视频: {anno_path}")
+
+        _log_update({"stage": "done", "message": "Pipeline 完成！视频已保存",
+                      "image": last_overlay_rgb, "video_path": anno_path})
+
+    if args.config:
+        # ── Config 模式：跳过 SAM + web，直接运行 pipeline ──
+        if default_tracking is None:
+            raise SystemExit("config 中缺少 tracking_point")
+        if default_mask is None:
+            raise SystemExit("config 中缺少 mask（需要 --mask-npy 或 config 中的 mask_save_path）")
+
+        annotate_result = {
+            "start": start_idx, "end": end_idx, "mask_ref": mask_frame_idx,
+            "tracking_point": default_tracking, "mask": default_mask,
+            "robot_type": args.robot_type,
+        }
+        CONFIG.update(
+            start_idx=start_idx, end_idx=end_idx, mask_frame_idx=mask_frame_idx,
+            tracking_point=list(default_tracking),
+        )
+        mask = default_mask
+
+        def _noop_update(state):
+            pass  # pipeline_fn 内部的 _log_update 已经 print
+
+        print("=" * 60)
+        print("Config 模式 — 跳过 web 交互，直接运行 pipeline")
+        print("=" * 60)
+        pipeline_fn(annotate_result, _noop_update)
+
     else:
+        # ── Web 模式：加载 SAM + web 交互 + pipeline ──
         from sam3.model_builder import build_sam3_image_model  # type: ignore[import-not-found]
         from sam3.model.sam3_image_processor import Sam3Processor  # type: ignore[import-not-found]
 
@@ -291,27 +468,58 @@ def main():
             enable_inst_interactivity=True,
         )
         sam3_processor = Sam3Processor(sam3_model, device=args.device)
-        sam3_state = sam3_processor.set_image(tgt_mask_pil)
+        _sam3_state = [None]
 
-        def predict_fn(pts: np.ndarray, lbs: np.ndarray) -> np.ndarray:
-            masks, _scores, _logits = sam3_model.predict_inst(
-                sam3_state,
-                point_coords=pts,
-                point_labels=lbs,
-                multimask_output=False,
+        def _set_image(pil_img):
+            _sam3_state[0] = sam3_processor.set_image(pil_img)
+
+        def _predict(pts, lbs):
+            masks, _, _ = sam3_model.predict_inst(
+                _sam3_state[0], point_coords=pts, point_labels=lbs, multimask_output=False,
             )
             return masks[0].astype(np.uint8)
 
-        print(f"SAM 交互页面: http://{args.host}:{args.sam_port}/ （左=前景 右=背景，保存/取消）")
-        mask = run_sam3_points_web(
-            np.asarray(tgt_mask_img),
-            predict_fn,
+        _robot_types = sorted(p.stem for p in (_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml"))
+
+        print(f"Web 交互页面: http://{args.host}:{args.tracking_port}/")
+        result = run_unified_web(
+            video, _predict, _set_image,
+            default_start=start_idx,
+            default_end=end_idx,
+            default_mask_ref=mask_frame_idx,
+            default_tracking=default_tracking,
+            default_mask=default_mask,
             host=args.host,
-            port=args.sam_port,
+            port=args.tracking_port,
             open_browser=not args.no_browser,
+            pipeline_fn=pipeline_fn,
+            robot_types=_robot_types,
+            default_robot_type=args.robot_type,
         )
-        if mask is None:
-            raise SystemExit("已取消 SAM，未保存 mask")
+
+        start_idx = result["start"]
+        end_idx = result["end"]
+        mask_frame_idx = result["mask_ref"]
+        mask = result["mask"]
+        CONFIG.update(
+            start_idx=start_idx, end_idx=end_idx, mask_frame_idx=mask_frame_idx,
+            tracking_point=list(result["tracking_point"]),
+        )
+
+    if mask is None:
+        raise SystemExit("未获得 mask")
+
+    clip = video[start_idx : end_idx + 1]
+    clip_joint = joint_angles[start_idx : end_idx + 1]
+    print("clip shape =", clip.shape, "clip_joint =", clip_joint.shape)
+
+    mask_output_dir = ensure_dir(
+        result_dir / task_name / f"ep_{args.episode_idx:06d}" / "masks"
+    )
+    result_mask_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}.npy"
+    result_overlay_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}_overlay.png"
+
+    tgt_mask_img = video[mask_frame_idx]
 
     np.save(result_mask_path, mask.astype(np.uint8))
     Image.fromarray(overlay_mask(tgt_mask_img, mask)).save(result_overlay_path)

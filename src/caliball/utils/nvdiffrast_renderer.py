@@ -52,7 +52,7 @@ class NVDiffrastRenderer:
 
         proj = K_to_projection(K, self.H, self.W, device=device)
         pose = self.opencv2blender @ object_pose
-        pos_clip = transform_pos(proj @ pose, verts, device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device).float()
 
         rast_out, _ = dr.rasterize(self.glctx, pos_clip, faces, resolution=self.resolution)
         if anti_aliasing:
@@ -79,7 +79,7 @@ class NVDiffrastRenderer:
 
         proj = K_to_projection(K, self.H, self.W, device=device)
         pose = self.opencv2blender @ object_pose
-        pos_clip = transform_pos(proj @ pose, verts, device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device).float()
 
         rast_out, _ = dr.rasterize(self.glctx, pos_clip, faces, resolution=self.resolution)
         color_value = torch.rand(3, device=device).view(1,3)  # RGB 0~1
@@ -116,7 +116,7 @@ class NVDiffrastRenderer:
         
         # pos_clip 形状: 1, N, 4
         # Note: transform_pos 内部应该处理 pose 矩阵乘法的顺序和齐次坐标转换
-        pos_clip = transform_pos(proj @ pose, verts, device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device).float()
         
         # 2. 光栅化 (Rasterization)
         # rast_out: (1, H, W, 4) - 包含 (x, y, z/w, primitive_id)
@@ -185,7 +185,7 @@ class NVDiffrastRenderer:
 
         pose = self.opencv2blender
 
-        pos_clip = transform_pos(proj @ pose, verts, device=device)
+        pos_clip = transform_pos(proj @ pose, verts, device=device).float()
 
         rast_out, _ = dr.rasterize(self.glctx, pos_clip, faces, resolution=self.resolution)
         if anti_aliasing:
