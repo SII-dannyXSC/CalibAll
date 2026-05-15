@@ -30,9 +30,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-# shellcheck source=/dev/null
-[[ -f .venv/bin/activate ]] && source .venv/bin/activate
-
 export PYTHONPATH="${PROJECT_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 : "${TASK_PATH:?请设置 TASK_PATH（LeRobot 任务目录绝对或相对路径）}"

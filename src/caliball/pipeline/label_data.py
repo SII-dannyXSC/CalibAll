@@ -12,10 +12,11 @@
 
 from __future__ import annotations
 
+import json
 import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -115,4 +116,81 @@ class LabelData:
     def load(cls, path: str | Path) -> LabelData:
         with open(Path(path), "rb") as f:
             return pickle.load(f)
+
+    # ------------------------------------------------------------------
+    # 转换为列字典（用于写入 parquet）
+    # ------------------------------------------------------------------
+
+    ARRAY_FIELDS: ClassVar[List[Tuple[str, int]]] = [
+        ("uv",                    2),
+        ("uvd",                   3),
+        ("xyz_euler_g",           7),
+        ("xyz_quat_g",            8),
+        ("xyz_mat_g",            13),
+        ("bbox_with_gripper",     4),
+        ("bbox_without_gripper",  4),
+        ("bbox_gripper",          4),
+    ]
+    MASK_FIELDS: ClassVar[List[str]] = [
+        "mask_with_gripper",
+        "mask_without_gripper",
+        "mask_gripper",
+    ]
+
+    @staticmethod
+    def _rle_to_str(rle: Optional[dict]) -> str:
+        if rle is None:
+            return ""
+        counts = rle.get("counts", "")
+        if isinstance(counts, (bytes, bytearray)):
+            counts = counts.decode("ascii")
+        return json.dumps({"size": rle["size"], "counts": counts}, ensure_ascii=True)
+
+    def to_columns(self, prefix: str = "annotation") -> Dict[str, list]:
+        """将标注数据转换为 ``{column_name: [values...]}`` 字典。
+
+        列名格式: ``{prefix}.{camera}.{arm}.{field}``
+        """
+        cols: Dict[str, list] = {}
+
+        def _col(cam: str, arm: str, fld: str) -> str:
+            return f"{prefix}.{cam}.{arm}.{fld}"
+
+        def _bbox_or_zero(bbox) -> list:
+            return list(bbox) if bbox is not None else [0, 0, 0, 0]
+
+        for cam, frames in self.cameras.items():
+            T = len(frames)
+            if T == 0:
+                continue
+            for arm_name in self.arm_names:
+                for fld, _ in self.ARRAY_FIELDS:
+                    cols[_col(cam, arm_name, fld)] = [None] * T
+                for fld in self.MASK_FIELDS:
+                    cols[_col(cam, arm_name, fld)] = [""] * T
+
+            for t, frame in enumerate(frames):
+                for arm_name, arm_label in frame.arms.items():
+                    if arm_label.is_placeholder:
+                        continue
+                    cols[_col(cam, arm_name, "uv")][t]                   = list(map(float, arm_label.uv))
+                    cols[_col(cam, arm_name, "uvd")][t]                  = list(map(float, arm_label.uvd))
+                    cols[_col(cam, arm_name, "xyz_euler_g")][t]          = list(map(float, arm_label.xyz_euler_g))
+                    cols[_col(cam, arm_name, "xyz_quat_g")][t]           = list(map(float, arm_label.xyz_quat_g))
+                    cols[_col(cam, arm_name, "xyz_mat_g")][t]            = list(map(float, arm_label.xyz_mat_g))
+                    cols[_col(cam, arm_name, "bbox_with_gripper")][t]    = _bbox_or_zero(arm_label.bbox_with_gripper)
+                    cols[_col(cam, arm_name, "bbox_without_gripper")][t] = _bbox_or_zero(arm_label.bbox_without_gripper)
+                    cols[_col(cam, arm_name, "bbox_gripper")][t]         = _bbox_or_zero(arm_label.bbox_gripper)
+                    cols[_col(cam, arm_name, "mask_with_gripper")][t]    = self._rle_to_str(arm_label.mask_with_gripper)
+                    cols[_col(cam, arm_name, "mask_without_gripper")][t] = self._rle_to_str(arm_label.mask_without_gripper)
+                    cols[_col(cam, arm_name, "mask_gripper")][t]         = self._rle_to_str(arm_label.mask_gripper)
+
+        for col, vals in cols.items():
+            fill = None
+            for v in vals:
+                if v is not None:
+                    fill = [0.0] * len(v) if isinstance(v, list) else ""
+                    break
+            cols[col] = [fill if v is None else v for v in vals] if fill is not None else vals
+        return cols
 

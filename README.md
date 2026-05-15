@@ -138,7 +138,7 @@ ckpt/
 ### Run Calibration
 
 ```bash
-PYTHONPATH=. python scripts/label_from_config.py \
+PYTHONPATH=. python scripts/label.py \
     --config src/caliball/config/berkeley_autolab_ur5.yaml \
     --output_dir ./label_out/berkeley_autolab_ur5
 ```
@@ -149,7 +149,9 @@ Replace the config file with any supported dataset config from `src/caliball/con
 
 ```bash
 PYTHONPATH=. python scripts/visualize_labels.py \
-    --label_dir ./label_out/berkeley_autolab_ur5
+    --json_path ./label_out/berkeley_autolab_ur5/episode_000000.json \
+    --task_path ./data/caliball_data/berkeley_autolab_ur5 \
+    --output_dir ./label_out/berkeley_autolab_ur5/vis
 ```
 
 ## Project Structure
