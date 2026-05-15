@@ -72,21 +72,44 @@ class Refinement:
         return result, loss_dict
 
     def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0, progress_callback=None):
+        """
+        支持单帧或多帧 mask：
+          - mask_id: int 或 list[int]
+          - mask: np.ndarray (H,W) 或 list[np.ndarray]（与 mask_id 一一对应）
+        """
         H, W = video.shape[1:3]
-        print(f"[refine] H={H}, W={W}, mask_id={mask_id}")
+
+        # 统一为 list 格式
+        if isinstance(mask_id, int):
+            mask_ids = [mask_id]
+        else:
+            mask_ids = list(mask_id)
+
+        if mask is None:
+            masks = [self.sam3_extractor.extract_masks(video[mid]) for mid in mask_ids]
+        elif isinstance(mask, list):
+            masks = mask
+        else:
+            masks = [mask]
+
+        if len(masks) != len(mask_ids):
+            raise ValueError(f"mask 数量 ({len(masks)}) 与 mask_id 数量 ({len(mask_ids)}) 不匹配")
+
+        print(f"[refine] H={H}, W={W}, mask_ids={mask_ids}, n_masks={len(masks)}")
         extrinsic = self._to_float_tensor(extrinsic)
         print("[refine] 创建 RBSolver …")
         solver = RBSolver(self.mesh_paths, H, W, extrinsic, device=self.device)
         solver.to(self.device)
         print("[refine] RBSolver 就绪")
 
-        link_poses_list = self._prepare_link_poses(joint_angles[mask_id:mask_id + 1])
-        print("[refine] link_poses 就绪")
+        # 多帧 link_poses: 逐帧 fkine_all 后拼接 (B, n_links, 4, 4)
+        link_poses_parts = [self._prepare_link_poses(joint_angles[mid:mid+1]) for mid in mask_ids]
+        link_poses_list = torch.cat(link_poses_parts, dim=0)
+        print(f"[refine] link_poses 就绪, shape={link_poses_list.shape}")
 
-        if mask is None:
-            mask = self.sam3_extractor.extract_masks(video[mask_id])
-            print(mask)
-        mask_tensor = self._prepare_mask_tensor(mask)
+        # 多帧 mask: (B, H, W)
+        mask_tensors = [self._prepare_mask_tensor(m) for m in masks]
+        mask_tensor = torch.cat(mask_tensors, dim=0)  # (B, H, W)
         print(f"[refine] mask_tensor shape={mask_tensor.shape}, 开始迭代")
 
         dps = {
@@ -117,40 +140,45 @@ class Refinement:
                 print(k, loss)
                 tsfm = output["tsfm"]
                 loss = loss.detach().cpu()
-                
-                save_path = os.path.join(base_path,f"{k}")
-                pred_mask_path = os.path.join(base_path,f"pred_mask")
+
+                save_path = os.path.join(base_path, f"{k}")
+                pred_mask_path = os.path.join(base_path, f"pred_mask")
                 os.makedirs(save_path, exist_ok=True)
                 os.makedirs(pred_mask_path, exist_ok=True)
-                with open(os.path.join(save_path, 'loss.txt'),'w')as f:
+                with open(os.path.join(save_path, 'loss.txt'), 'w') as f:
                     f.write(str(loss))
-                with open(os.path.join(save_path, 'tsfm.txt'),'w')as f:
+                with open(os.path.join(save_path, 'tsfm.txt'), 'w') as f:
                     f.write(str(tsfm))
-                with open(os.path.join(save_path, 'intrinsic.txt'),'w') as f:
+                with open(os.path.join(save_path, 'intrinsic.txt'), 'w') as f:
                     f.write(str(intrinsic))
 
-                idx=0
-                cur_rgb = video[mask_id][:, :, ::-1]
-                img = Image.fromarray(video[mask_id])
-                img.save(os.path.join(base_path, f'origin.png'))
-                
-                render_pre = output["rendered_masks"][idx].detach().cpu()
-                render_gt = mask_tensor.detach().cpu()[0].float()
-                
-                save_img(render_gt,path = os.path.join(save_path, f'mask_{idx}_gt.png'))
-                save_img(render_gt,path = os.path.join(base_path, f'mask_gt.png'))
-                save_img(render_pre,path = os.path.join(save_path, f'mask_{idx}_pred.png'))
+                # 为每帧 mask 生成 overlay
+                overlays_rgb = []
+                for bi, mid in enumerate(mask_ids):
+                    cur_rgb = video[mid][:, :, ::-1]
+                    if bi == 0:
+                        img = Image.fromarray(video[mid])
+                        img.save(os.path.join(base_path, f'origin.png'))
 
-                # 生成彩色版本的 mask（红色叠加）
-                # color = np.zeros_like(cur_rgb)
-                color = [0, 255, 0]  # r
-                mask_render = render_pre.numpy().astype(np.uint8)
-                mask_render = (mask_render > 0).astype(np.uint8)
-                overlay = add_mask(cur_rgb, mask_render, color=color, alpha=0.5)
-                cv2.imwrite(os.path.join(save_path, f'output_with_mask_{idx}.png'), overlay)
-                cv2.imwrite(os.path.join(pred_mask_path, f'{k}.png'), overlay)
+                    render_pre = output["rendered_masks"][bi].detach().cpu()
+                    render_gt = mask_tensor.detach().cpu()[bi].float()
+
+                    save_img(render_gt, path=os.path.join(save_path, f'mask_{bi}_gt.png'))
+                    save_img(render_pre, path=os.path.join(save_path, f'mask_{bi}_pred.png'))
+                    if bi == 0:
+                        save_img(render_gt, path=os.path.join(base_path, f'mask_gt.png'))
+
+                    color = [0, 255, 0]
+                    mask_render = render_pre.numpy().astype(np.uint8)
+                    mask_render = (mask_render > 0).astype(np.uint8)
+                    overlay = add_mask(cur_rgb, mask_render, color=color, alpha=0.5)
+                    cv2.imwrite(os.path.join(save_path, f'output_with_mask_{bi}.png'), overlay)
+                    if bi == 0:
+                        cv2.imwrite(os.path.join(pred_mask_path, f'{k}.png'), overlay)
+                    overlays_rgb.append(overlay[:, :, ::-1])  # BGR → RGB
 
                 if progress_callback is not None:
                     progress_callback(step=k, max_steps=max_steps, loss=float(loss),
-                                      overlay=overlay[:, :, ::-1])  # BGR → RGB
-        return output, loss_dict     
+                                      overlay=overlays_rgb[0],
+                                      overlays=overlays_rgb, mask_ids=mask_ids)
+        return output, loss_dict

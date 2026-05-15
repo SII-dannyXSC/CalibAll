@@ -110,18 +110,75 @@ def json_serialize(v: Any) -> Any:
     return str(v)
 
 
+def scan_datasets(data_root: str) -> list:
+    """扫描 data_root 下的可用数据集，返回 datasets_info 列表。"""
+    root = Path(data_root)
+    if not root.is_dir():
+        print(f"[scan] 数据根目录不存在: {root}")
+        return []
+    results = []
+    # 遍历 data_root 下两级目录寻找 LeRobot 格式数据集
+    # LeRobot 数据集特征：含 data/ 子目录或 meta/ 子目录
+    for sub in sorted(root.iterdir()):
+        if not sub.is_dir():
+            continue
+        # sub 可能是 dataset_name 层（如 robomind.ur_1rgb）
+        # 再下一级是 task_name（如 pick_up_can）
+        for task_dir in sorted(sub.iterdir()):
+            if not task_dir.is_dir():
+                continue
+            # 检查是否有 LeRobot 数据集特征
+            has_data = (task_dir / "data").is_dir() or (task_dir / "meta").is_dir()
+            if not has_data:
+                continue
+            # 扫描 cameras
+            cameras = []
+            meta_dir = task_dir / "meta"
+            if meta_dir.is_dir():
+                info_json = meta_dir / "info.json"
+                if info_json.is_file():
+                    try:
+                        import json as _json
+                        info = _json.loads(info_json.read_text())
+                        cameras = info.get("camera_keys", info.get("video_keys", []))
+                    except Exception:
+                        pass
+            if not cameras:
+                # 从 videos/ 目录推断
+                videos_dir = task_dir / "videos"
+                if videos_dir.is_dir():
+                    for vf in videos_dir.iterdir():
+                        if vf.suffix == ".mp4":
+                            cam = vf.stem.rsplit("_episode_", 1)[0] if "_episode_" in vf.stem else vf.stem
+                            if cam not in cameras:
+                                cameras.append(cam)
+                    cameras.sort()
+
+            results.append({
+                "task_path": str(task_dir),
+                "task_name": task_dir.name,
+                "dataset_name": sub.name,
+                "display_name": f"{sub.name}/{task_dir.name}",
+                "cameras": cameras,
+            })
+    print(f"[scan] 扫描到 {len(results)} 个数据集（{data_root}）")
+    return results
+
+
 def parse_args():
     p = argparse.ArgumentParser(description="外参检测：Web 交互选点 + SAM3 mask，写 manual_label")
     p.add_argument("--task-path", type=str, default=None, help="LeRobot 数据集根目录（--config 模式可省略）")
     p.add_argument("--task-name", type=str, default=None, help="默认 os.path.basename(task-path)")
     p.add_argument("--dataset-name", type=str, default=None)
     p.add_argument("--camera-name", type=str, default=None, help="如 observation.images.camera_top")
+    p.add_argument("--data-root", type=str, default=None, help="数据根目录，自动扫描可用数据集（如 data/RoboMIND_lerobot_v2.1_sl/）")
     p.add_argument("--robot-type", type=str, default="ur5e")
     p.add_argument("--episode-idx", type=int, default=0)
     p.add_argument("--strike", type=int, default=4)
     p.add_argument("--start-idx", type=int, default=0)
     p.add_argument("--end-idx", type=int, default=39)
-    p.add_argument("--mask-frame-idx", type=int, default=None, help="mask 参考帧索引，默认为 start-idx（第一帧）")
+    p.add_argument("--mask-frame-idx", type=int, default=None, help="单个 mask 参考帧索引（向后兼容）")
+    p.add_argument("--mask-frame-idxs", type=int, nargs="+", default=None, help="多个 mask 参考帧索引，如 --mask-frame-idxs 0 5 10")
     p.add_argument(
         "--state-key",
         type=str,
@@ -145,7 +202,7 @@ def parse_args():
     p.add_argument("--host", type=str, default="127.0.0.1", help="监听地址；远程可用 0.0.0.0 + SSH 转发")
     p.add_argument("--tracking-port", type=int, default=8765)
     p.add_argument("--sam-port", type=int, default=8766)
-    p.add_argument("--max-steps", type=int, default=3000, help="Refinement 最大迭代步数")
+    p.add_argument("--max-steps", type=int, default=10000, help="Refinement 最大迭代步数")
     p.add_argument("--config", type=str, default=None, help="从已有的 config.json 加载标注参数，跳过 web 交互直接运行 pipeline")
     p.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
     p.add_argument(
@@ -180,7 +237,11 @@ def main():
         args.strike = cfg.get("strike", args.strike)
         args.start_idx = cfg.get("start_idx", args.start_idx)
         args.end_idx = cfg.get("end_idx", args.end_idx)
-        args.mask_frame_idx = cfg.get("mask_frame_idx", args.mask_frame_idx)
+        # 兼容旧 config 的 mask_frame_idx（单值）和新的 mask_frame_idxs（列表）
+        if "mask_frame_idxs" in cfg:
+            args.mask_frame_idxs = args.mask_frame_idxs or cfg["mask_frame_idxs"]
+        elif "mask_frame_idx" in cfg:
+            args.mask_frame_idx = cfg.get("mask_frame_idx", args.mask_frame_idx)
         if "tracking_point" in cfg and cfg["tracking_point"]:
             args.tracking_x = cfg["tracking_point"][0]
             args.tracking_y = cfg["tracking_point"][1]
@@ -189,8 +250,20 @@ def main():
         args.state_key = cfg.get("state_key", args.state_key)
         print(f"从 config 加载参数: {args.config}")
 
+    # ── 数据集扫描（--data-root 模式） ──
+    datasets_info = None
+    if args.data_root:
+        datasets_info = scan_datasets(args.data_root)
+        # 如果未指定 task-path，使用第一个数据集
+        if datasets_info and not args.task_path:
+            ds0 = datasets_info[0]
+            args.task_path = ds0["task_path"]
+            args.dataset_name = args.dataset_name or ds0["dataset_name"]
+            if not args.camera_name and ds0.get("cameras"):
+                args.camera_name = ds0["cameras"][0]
+
     if not args.task_path or not args.dataset_name or not args.camera_name:
-        raise SystemExit("需要 --task-path, --dataset-name, --camera-name（或使用 --config）")
+        raise SystemExit("需要 --task-path, --dataset-name, --camera-name（或使用 --config / --data-root）")
 
     task_path = args.task_path
     task_name = args.task_name or Path(task_path).name
@@ -213,9 +286,9 @@ def main():
         "strike": args.strike,
         "start_idx": args.start_idx,
         "end_idx": args.end_idx,
-        "mask_frame_idx": args.mask_frame_idx,
+        "mask_frame_idxs": None,
         "tracking_point": None,
-        "mask_save_path": None,
+        "mask_save_paths": None,
         "sam_prompt": "robotic arm",
         "device": args.device,
         "frame_export_dir": str(frame_export_dir),
@@ -265,17 +338,25 @@ def main():
     # ── 确定默认值 ──
     start_idx = int(args.start_idx)
     end_idx = int(args.end_idx)
-    mask_frame_idx = int(args.mask_frame_idx) if args.mask_frame_idx is not None else start_idx
+
+    # 多帧 mask：优先 --mask-frame-idxs，其次 --mask-frame-idx，默认 [start_idx]
+    if args.mask_frame_idxs is not None:
+        mask_frame_idxs = list(args.mask_frame_idxs)
+    elif args.mask_frame_idx is not None:
+        mask_frame_idxs = [int(args.mask_frame_idx)]
+    else:
+        mask_frame_idxs = [start_idx]
 
     default_tracking = None
     if args.tracking_x is not None and args.tracking_y is not None:
         default_tracking = (float(args.tracking_x), float(args.tracking_y))
 
-    default_mask = None
+    default_masks = None
     if args.mask_npy:
-        default_mask = np.load(args.mask_npy)
-        if default_mask.dtype != np.uint8:
-            default_mask = default_mask.astype(np.uint8)
+        m = np.load(args.mask_npy)
+        if m.dtype != np.uint8:
+            m = m.astype(np.uint8)
+        default_masks = [m]
         print("已加载默认 mask:", args.mask_npy)
 
     # ── 预加载所有 Pipeline 模型（标注期间模型已就绪） ──
@@ -306,14 +387,14 @@ def main():
             update_fn(state)
 
         s, e = annotate_result["start"], annotate_result["end"]
-        mask_ref = annotate_result["mask_ref"]
+        mask_refs = annotate_result.get("mask_refs", [annotate_result.get("mask_ref", s)])
         tp = list(annotate_result["tracking_point"])
-        msk = annotate_result["mask"]
+        masks = annotate_result.get("masks", [annotate_result.get("mask")])
 
         clip = video[s : e + 1]
         clip_joint = joint_angles[s : e + 1]
-        mask_id = mask_ref - s
-        print(f"[pipeline] clip: [{s}, {e}], mask_ref={mask_ref}, mask_id={mask_id}, tracking={tp}")
+        mask_ids = [mr - s for mr in mask_refs]
+        print(f"[pipeline] clip: [{s}, {e}], mask_refs={mask_refs}, mask_ids={mask_ids}, tracking={tp}")
 
         pipe_save = ensure_dir(result_dir / task_name / f"ep_{args.episode_idx:06d}" / "pipeline")
         print(f"[pipeline] save_path: {pipe_save}")
@@ -358,19 +439,24 @@ def main():
         # Stage 2: Refinement
         _log_update({"stage": "refine", "message": "开始 Refinement…", "step": 0, "max_steps": args.max_steps})
         print("[pipeline] 调用 refinement.refine() ...")
-        print(f"[pipeline] clip.shape={clip.shape}, clip_joint.shape={clip_joint.shape}, mask_id={mask_id}, mask.shape={msk.shape if msk is not None else None}")
+        print(f"[pipeline] clip.shape={clip.shape}, clip_joint.shape={clip_joint.shape}, mask_ids={mask_ids}, n_masks={len(masks)}")
 
-        def _refine_cb(step, max_steps, loss, overlay):
-            _log_update({
+        def _refine_cb(step, max_steps, loss, overlay, overlays=None, mask_ids=None):
+            state = {
                 "stage": "refine",
                 "message": f"step {step}/{max_steps}  loss={loss:.6f}",
                 "step": step, "max_steps": max_steps,
                 "image": overlay,
-            })
+            }
+            if overlays is not None:
+                state["overlays"] = overlays
+            if mask_ids is not None:
+                state["mask_ids"] = mask_ids
+            _log_update(state)
 
         output, loss_dict = refinement.refine(
             clip, clip_joint, K, extrinsic, str(pipe_save),
-            mask=msk, mask_id=mask_id, max_steps=args.max_steps,
+            mask=masks, mask_id=mask_ids, max_steps=args.max_steps,
             progress_callback=_refine_cb,
         )
 
@@ -424,7 +510,26 @@ def main():
                 _log_update({"stage": "done", "message": f"可视化 {fi + 1}/{len(clip)}", "image": last_overlay_rgb})
 
         vw.release()
-        print(f"[pipeline] 标注视频: {anno_path}")
+        print(f"[pipeline] 标注视频(mp4v): {anno_path}")
+
+        # 转码为 H.264（浏览器兼容）
+        import subprocess
+        h264_path = str(pipe_save / "anno_video_h264.mp4")
+        try:
+            import imageio_ffmpeg
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        except ImportError:
+            ffmpeg_exe = "ffmpeg"
+        try:
+            subprocess.run(
+                [ffmpeg_exe, "-y", "-i", anno_path, "-c:v", "libx264",
+                 "-preset", "fast", "-crf", "23", "-pix_fmt", "yuv420p", h264_path],
+                check=True, capture_output=True,
+            )
+            anno_path = h264_path
+            print(f"[pipeline] 已转码 H.264: {anno_path}")
+        except Exception as e:
+            print(f"[pipeline] ffmpeg 转码失败，使用原始视频: {e}")
 
         _log_update({"stage": "done", "message": "Pipeline 完成！视频已保存",
                       "image": last_overlay_rgb, "video_path": anno_path})
@@ -433,19 +538,21 @@ def main():
         # ── Config 模式：跳过 SAM + web，直接运行 pipeline ──
         if default_tracking is None:
             raise SystemExit("config 中缺少 tracking_point")
-        if default_mask is None:
+        if default_masks is None:
             raise SystemExit("config 中缺少 mask（需要 --mask-npy 或 config 中的 mask_save_path）")
 
         annotate_result = {
-            "start": start_idx, "end": end_idx, "mask_ref": mask_frame_idx,
-            "tracking_point": default_tracking, "mask": default_mask,
+            "start": start_idx, "end": end_idx,
+            "mask_refs": mask_frame_idxs, "mask_ref": mask_frame_idxs[0],
+            "tracking_point": default_tracking,
+            "masks": default_masks, "mask": default_masks[0],
             "robot_type": args.robot_type,
         }
         CONFIG.update(
-            start_idx=start_idx, end_idx=end_idx, mask_frame_idx=mask_frame_idx,
+            start_idx=start_idx, end_idx=end_idx, mask_frame_idxs=mask_frame_idxs,
             tracking_point=list(default_tracking),
         )
-        mask = default_mask
+        masks = default_masks
 
         def _noop_update(state):
             pass  # pipeline_fn 内部的 _log_update 已经 print
@@ -481,63 +588,86 @@ def main():
 
         _robot_types = sorted(p.stem for p in (_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml"))
 
+        # 构造 datasets_info load_fn（用于 web 动态切换数据集）
+        if datasets_info:
+            for ds_entry in datasets_info:
+                def _make_load_fn(tp, dn):
+                    def _load(camera):
+                        ds = LeRobotDataset(tp, state_key=args.state_key)
+                        ep = ds[args.episode_idx]
+                        v = ep["videos"].get(camera)
+                        if v is None:
+                            return None
+                        return v[:: args.strike]
+                    return _load
+                ds_entry["load_fn"] = _make_load_fn(ds_entry["task_path"], ds_entry["dataset_name"])
+
         print(f"Web 交互页面: http://{args.host}:{args.tracking_port}/")
         result = run_unified_web(
             video, _predict, _set_image,
             default_start=start_idx,
             default_end=end_idx,
-            default_mask_ref=mask_frame_idx,
+            default_mask_refs=mask_frame_idxs,
             default_tracking=default_tracking,
-            default_mask=default_mask,
+            default_masks=default_masks,
             host=args.host,
             port=args.tracking_port,
             open_browser=not args.no_browser,
             pipeline_fn=pipeline_fn,
             robot_types=_robot_types,
             default_robot_type=args.robot_type,
+            datasets_info=datasets_info,
         )
 
         start_idx = result["start"]
         end_idx = result["end"]
-        mask_frame_idx = result["mask_ref"]
-        mask = result["mask"]
+        mask_frame_idxs = result.get("mask_refs", [result.get("mask_ref", start_idx)])
+        masks = result.get("masks", [result.get("mask")])
         CONFIG.update(
-            start_idx=start_idx, end_idx=end_idx, mask_frame_idx=mask_frame_idx,
+            start_idx=start_idx, end_idx=end_idx, mask_frame_idxs=mask_frame_idxs,
             tracking_point=list(result["tracking_point"]),
         )
 
-    if mask is None:
+    if not masks or all(m is None for m in masks):
         raise SystemExit("未获得 mask")
 
     clip = video[start_idx : end_idx + 1]
     clip_joint = joint_angles[start_idx : end_idx + 1]
     print("clip shape =", clip.shape, "clip_joint =", clip_joint.shape)
 
+    # ── 保存多帧 mask 结果 ──
     mask_output_dir = ensure_dir(
         result_dir / task_name / f"ep_{args.episode_idx:06d}" / "masks"
     )
-    result_mask_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}.npy"
-    result_overlay_path = mask_output_dir / f"{camera_key}_{mask_frame_idx:06d}_overlay.png"
-
-    tgt_mask_img = video[mask_frame_idx]
-
-    np.save(result_mask_path, mask.astype(np.uint8))
-    Image.fromarray(overlay_mask(tgt_mask_img, mask)).save(result_overlay_path)
-    print("结果 mask:", result_mask_path)
-    print("结果 overlay:", result_overlay_path)
+    for mi, (mfi, msk) in enumerate(zip(mask_frame_idxs, masks)):
+        if msk is None:
+            continue
+        result_mask_path = mask_output_dir / f"{camera_key}_{mfi:06d}.npy"
+        result_overlay_path = mask_output_dir / f"{camera_key}_{mfi:06d}_overlay.png"
+        tgt_mask_img = video[mfi]
+        np.save(result_mask_path, msk.astype(np.uint8))
+        Image.fromarray(overlay_mask(tgt_mask_img, msk)).save(result_overlay_path)
+        print(f"结果 mask[{mi}]: {result_mask_path}")
+        print(f"结果 overlay[{mi}]: {result_overlay_path}")
 
     dataset_name_fs = args.dataset_name.replace("/", ".")
     filename_prefix = f"{dataset_name_fs}.{task_name}.{camera_key}.{args.episode_idx}"
-    manual_mask_path = manual_label_dir / f"{filename_prefix}.mask.npy"
-    config_save_path = manual_label_dir / f"{filename_prefix}.config.json"
-    mask_overlay_path = manual_label_dir / f"{filename_prefix}.mask_overlay.png"
+
+    # 保存每帧 mask 到 manual_label
+    mask_save_paths = []
+    for mi, (mfi, msk) in enumerate(zip(mask_frame_idxs, masks)):
+        if msk is None:
+            continue
+        suffix = f".mask_{mfi}" if len(mask_frame_idxs) > 1 else ".mask"
+        manual_mask_path = manual_label_dir / f"{filename_prefix}{suffix}.npy"
+        mask_overlay_path = manual_label_dir / f"{filename_prefix}{suffix}_overlay.png"
+        np.save(manual_mask_path, msk.astype(np.uint8))
+        Image.fromarray(overlay_mask(video[mfi], msk)).save(mask_overlay_path)
+        mask_save_paths.append(str(manual_mask_path))
+        print(f"manual_label mask[{mi}]: {manual_mask_path}")
+
     tracking_point_vis_path = manual_label_dir / f"{filename_prefix}.tracking_point_vis.png"
-
-    np.save(manual_mask_path, mask.astype(np.uint8))
-    print("manual_label mask:", manual_mask_path)
-
-    overlay = overlay_mask(tgt_mask_img, mask)
-    Image.fromarray(overlay).save(mask_overlay_path)
+    config_save_path = manual_label_dir / f"{filename_prefix}.config.json"
 
     frame0 = np.asarray(video[start_idx])
     if frame0.max() <= 1.0:
@@ -549,7 +679,7 @@ def main():
     draw.ellipse([tp[0] - r, tp[1] - r, tp[0] + r, tp[1] + r], outline=(255, 0, 0), width=3, fill=(255, 0, 0))
     vis_img.save(tracking_point_vis_path)
 
-    CONFIG["mask_save_path"] = str(manual_mask_path)
+    CONFIG["mask_save_paths"] = mask_save_paths
     with open(config_save_path, "w", encoding="utf-8") as f:
         json.dump(json_serialize(CONFIG), f, indent=2, ensure_ascii=False)
     print("config:", config_save_path)

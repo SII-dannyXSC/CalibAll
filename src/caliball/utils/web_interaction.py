@@ -442,34 +442,47 @@ def run_unified_web(
     default_start: int = 0,
     default_end: Optional[int] = None,
     default_mask_ref: Optional[int] = None,
+    default_mask_refs: Optional[list] = None,
     default_tracking: Optional[Tuple[float, float]] = None,
     default_mask: Optional[np.ndarray] = None,
+    default_masks: Optional[list] = None,
     host: str = "127.0.0.1",
     port: int = 8765,
     open_browser: bool = True,
     pipeline_fn: Optional[Callable] = None,
     robot_types: Optional[list] = None,
     default_robot_type: str = "",
+    datasets_info: Optional[list] = None,
+    default_dataset_idx: int = 0,
 ) -> dict:
     """
     统一 Web 交互页面：选帧 + 选追踪点 + 选 mask，三步同页。
-    每步有"使用默认 / 手动选择"切换。
+    支持多帧 mask（多个 mask 参考帧，每帧独立 SAM 交互）。
+    支持数据集选择（datasets_info 提供可选数据集列表）。
 
     predict_fn(pts (N,2) float32, labels (N,) int32) -> mask uint8
     set_image_fn(PIL.Image) -> None  更新 SAM 当前图片
 
-    Returns dict: start, end, mask_ref, tracking_point, mask
+    Returns dict: start, end, mask_refs, tracking_point, masks
     """
     import cv2
+    import os
 
     n = len(frames)
     if default_end is None:
         default_end = n - 1
-    if default_mask_ref is None:
-        default_mask_ref = default_start
+
+    # ── 兼容旧接口：单帧 → list ──
+    if default_mask_refs is None:
+        if default_mask_ref is not None:
+            default_mask_refs = [default_mask_ref]
+        else:
+            default_mask_refs = [default_start]
+    if default_masks is None and default_mask is not None:
+        default_masks = [default_mask]
 
     has_def_t = default_tracking is not None
-    has_def_m = default_mask is not None
+    has_def_m = default_masks is not None and len(default_masks) > 0
 
     # ── 缩略图 ──
     print(f"[web] 生成 {n} 帧缩略图 …")
@@ -477,32 +490,32 @@ def run_unified_web(
 
     # ── 初始图片 ──
     tracking_url = _image_to_data_url(frames[default_start])
+    first_mask_ref = default_mask_refs[0]
     if has_def_m:
-        vis = frames[default_mask_ref].copy()
+        vis = frames[first_mask_ref].copy()
         base = vis.copy()
-        m = default_mask > 0
+        m = default_masks[0] > 0
         g = np.zeros_like(vis)
         g[..., 1] = 255
         bl = (base.astype(np.float32) * 0.55 + g.astype(np.float32) * 0.45).astype(np.uint8)
         vis = np.where(m[..., None], bl, base)
         mask_url = _image_to_data_url(vis)
     else:
-        mask_url = _image_to_data_url(frames[default_mask_ref])
+        mask_url = _image_to_data_url(frames[first_mask_ref])
 
     # ── 预设 SAM ──
-    set_image_fn(Image.fromarray(frames[default_mask_ref]))
+    set_image_fn(Image.fromarray(frames[first_mask_ref]))
     print("[web] SAM image 已预设")
 
-    # ── 共享状态 ──
+    # ── 多帧 SAM 状态 (per-frame) ──
     lock = threading.Lock()
-    shared: dict = {"overlay": mask_url, "status": "左键=前景 右键=背景", "pts": 0}
+    shared: dict = {"overlay": mask_url, "status": "左键=前景 右键=背景", "pts": 0, "cur_mask_idx": 0}
     cmd_q: queue.Queue = queue.Queue()
     result: dict = {"val": None}
     finished = threading.Event()
 
-    sam_points: list = []
-    sam_labels: list = []
-    current_mask: Optional[np.ndarray] = None
+    # 每帧独立的 SAM 状态
+    per_frame_sam: dict = {}  # {frame_idx: {"points": [], "labels": [], "mask": None}}
 
     def _ov(img, msk, pts, labs):
         v = np.asarray(img).copy()
@@ -527,6 +540,7 @@ def run_unified_web(
     hdt = "true" if has_def_t else "false"
     hdm = "true" if has_def_m else "false"
     hp = "true" if pipeline_fn is not None else "false"
+    init_ms_json = json.dumps(default_mask_refs)
 
     if robot_types:
         _opts = "".join(
@@ -539,6 +553,32 @@ def run_unified_web(
                        "</label></div>")
     else:
         robot_html = ""
+
+    # 数据集选择 HTML
+    if datasets_info:
+        ds_opts = "".join(
+            "<option value='" + str(i) + "'" + (" selected" if i == default_dataset_idx else "") + ">"
+            + d.get("display_name", d.get("task_name", str(i))) + "</option>"
+            for i, d in enumerate(datasets_info)
+        )
+        cam_opts = ""
+        if datasets_info and default_dataset_idx < len(datasets_info):
+            cams = datasets_info[default_dataset_idx].get("cameras", [])
+            cam_opts = "".join("<option value='" + c + "'>" + c + "</option>" for c in cams)
+        dataset_html = (
+            "<div style='margin-bottom:12px;display:flex;gap:16px;align-items:center;flex-wrap:wrap'>"
+            "<label style='font-size:14px'>数据集: "
+            "<select id=ds style='padding:4px 8px;font-size:14px' onchange='switchDs()'>" + ds_opts + "</select>"
+            "</label>"
+            "<label style='font-size:14px'>Camera: "
+            "<select id=cam style='padding:4px 8px;font-size:14px'>" + cam_opts + "</select>"
+            "</label>"
+            "<button onclick='loadDs()' style='padding:4px 12px;font-size:14px'>加载</button>"
+            "<span id=ds-status style='font-size:13px;color:#666'></span>"
+            "</div>"
+        )
+    else:
+        dataset_html = ""
 
     html = (
         "<!DOCTYPE html><html lang=zh-CN><head><meta charset=UTF-8>"
@@ -580,9 +620,14 @@ def run_unified_web(
         ".ps.done{color:#0a0}"
         "#fin-btn{display:none;margin:16px auto;padding:10px 32px;font-size:16px;"
         "cursor:pointer;background:#0a0;color:#fff;border:none;border-radius:6px}"
+        ".mtabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}"
+        ".mtab{padding:4px 12px;border:2px solid #06f;border-radius:4px;cursor:pointer;"
+        "background:#fff;font-size:13px}"
+        ".mtab.a{background:#06f;color:#fff}"
+        ".mtab .x{margin-left:6px;color:#c00;font-weight:bold}"
         "</style></head><body>"
         "<h2>外参检测 - 交互标注</h2>"
-        + robot_html +
+        + dataset_html + robot_html +
         # ── Step 1 ──
         "<section class=step>"
         "<div class=sh><h3>1. 帧选择</h3>"
@@ -592,7 +637,7 @@ def run_unified_web(
         "<div class=mb id=fmb>"
         "<button class=a data-m=start onclick=\"sfm('start')\">起始帧</button>"
         "<button data-m=end onclick=\"sfm('end')\">结束帧</button>"
-        "<button data-m=mask onclick=\"sfm('mask')\">mask参考帧</button></div>"
+        "<button data-m=mask onclick=\"sfm('mask')\">mask参考帧(多选)</button></div>"
         "<div class=lg>"
         "<span><i style='border-color:#0a0'></i>起始</span>"
         "<span><i style='border-color:#c00'></i>结束</span>"
@@ -608,14 +653,15 @@ def run_unified_web(
         "<div class='sb" + (" off" if has_def_t else "") + "' id=tb>"
         "<div id=tw><img id=timg src='" + tracking_url + "'/>"
         "<div class=dot id=td style=display:none></div></div></div></section>"
-        # ── Step 3 ──
+        # ── Step 3: Multi-mask ──
         "<section class=step>"
-        "<div class=sh><h3>3. Mask</h3>"
+        "<div class=sh><h3>3. Mask（多帧）</h3>"
         "<label class=tg id=ml><input type=checkbox id=mau "
         + ("checked" if has_def_m else "")
         + " onchange=\"tog('m')\"> 使用默认</label></div>"
         "<div class=si id=mi></div>"
         "<div class='sb" + (" off" if has_def_m else "") + "' id=mmb>"
+        "<div class=mtabs id=mtabs></div>"
         "<div class=sb2><button onclick=samUndo()>撤销</button>"
         "<span id=ms>左键=前景 右键=背景</span></div>"
         "<div id=mw><img id=mimg src='" + mask_url + "'/></div></div></section>"
@@ -629,6 +675,7 @@ def run_unified_web(
         "<div class=ps id=ps-refine>&#9203; Refinement <span id=p-step></span></div>"
         "</div>"
         "<p id=p-msg style='margin:8px 0;font-size:14px'>等待标注完成...</p>"
+        "<div class=mtabs id=p-mtabs style='display:none'></div>"
         "<img id=p-img style='max-width:100%;max-height:50vh;display:none;margin-top:8px'/>"
         "</div></section>"
         "<button id=fin-btn onclick=fin()>退出</button>"
@@ -638,11 +685,15 @@ def run_unified_web(
         "<script>"
         "var T=" + thumbs_json + ";"
         "var S={s:" + str(default_start) + ",e:" + str(default_end)
-        + ",m:" + str(default_mask_ref)
+        + ",ms:" + init_ms_json
+        + ",curMI:0"
         + ",tx:" + dt_x + ",ty:" + dt_y
         + ",fm:'start',fa:false"
         + ",ta:" + hdt + ",ma:" + hdm + "};"
-        "var HDT=" + hdt + ",HDM=" + hdm + ",samPts=0,HP=" + hp + ";"
+        "var HDT=" + hdt + ",HDM=" + hdm + ",HP=" + hp + ";"
+        # Per-frame SAM pts tracker (client side)
+        "var samPtsMap={};"
+        "S.ms.forEach(function(m){samPtsMap[m]=0;});"
         # Frame grid
         "function renderGrid(){"
         "var g=document.getElementById('fg');g.innerHTML='';"
@@ -651,28 +702,53 @@ def run_unified_web(
         "if(i>=S.s&&i<=S.e)d.classList.add('ir');"
         "if(i===S.s)d.classList.add('ss');"
         "if(i===S.e)d.classList.add('se');"
-        "if(i===S.m)d.classList.add('sm');"
+        "if(S.ms.indexOf(i)>=0)d.classList.add('sm');"
         "var im=document.createElement('img');im.src=T[i];d.appendChild(im);"
         "var sp=document.createElement('span');sp.textContent=i;d.appendChild(sp);"
         "d.dataset.idx=i;d.onclick=function(){pickF(parseInt(this.dataset.idx))};"
         "g.appendChild(d);}}"
         # Pick frame
         "function pickF(i){"
-        "var om=S.m;"
-        "if(S.fm==='start'){S.s=i;if(S.e<i)S.e=i;if(S.m<S.s||S.m>S.e)S.m=S.s;}"
-        "else if(S.fm==='end'){S.e=i;if(S.s>i)S.s=i;if(S.m<S.s||S.m>S.e)S.m=S.s;}"
-        "else{if(i<S.s||i>S.e){alert('mask参考帧须在范围内');return;}S.m=i;}"
-        "renderGrid();upInfo();upTImg();"
-        "if(S.m!==om&&!S.ma)upSam(S.m);}"
+        "if(S.fm==='start'){S.s=i;if(S.e<i)S.e=i;"
+        "S.ms=S.ms.filter(function(m){return m>=S.s&&m<=S.e;});"
+        "if(S.ms.length===0)S.ms=[S.s];}"
+        "else if(S.fm==='end'){S.e=i;if(S.s>i)S.s=i;"
+        "S.ms=S.ms.filter(function(m){return m>=S.s&&m<=S.e;});"
+        "if(S.ms.length===0)S.ms=[S.s];}"
+        "else{"  # mask mode: toggle
+        "if(i<S.s||i>S.e){alert('mask参考帧须在范围内');return;}"
+        "var idx=S.ms.indexOf(i);"
+        "if(idx>=0){if(S.ms.length>1)S.ms.splice(idx,1);}"
+        "else{S.ms.push(i);S.ms.sort(function(a,b){return a-b;});}"
+        "if(!(i in samPtsMap))samPtsMap[i]=0;}"
+        "S.curMI=0;"
+        "renderGrid();renderMTabs();upInfo();upTImg();"
+        "if(!S.ma)switchMask(0);}"
         # Frame mode
         "function sfm(m){S.fm=m;"
         "document.querySelectorAll('#fmb button[data-m]')"
         ".forEach(function(b){b.classList.toggle('a',b.dataset.m===m)});}"
+        # Mask tabs
+        "function renderMTabs(){"
+        "var c=document.getElementById('mtabs');c.innerHTML='';"
+        "S.ms.forEach(function(m,i){"
+        "var b=document.createElement('div');b.className='mtab'+(i===S.curMI?' a':'');"
+        "b.textContent='帧 '+m;"
+        "var pts=samPtsMap[m]||0;"
+        "if(pts>0){var sp=document.createElement('span');sp.textContent=' ('+pts+'点)';sp.style.fontSize='11px';b.appendChild(sp);}"
+        "b.onclick=function(){switchMask(i);};"
+        "c.appendChild(b);});}"
+        # Switch mask tab
+        "function switchMask(idx){"
+        "S.curMI=idx;"
+        "renderMTabs();"
+        "fetch('/api/sam/switch_frame',{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({fi:S.ms[idx]})});}"
         # Toggle
         "function tog(w){"
         "if(w==='f')S.fa=document.getElementById('fa').checked;"
         "else if(w==='t')S.ta=document.getElementById('ta').checked;"
-        "else{S.ma=document.getElementById('mau').checked;if(!S.ma)upSam(S.m);}"
+        "else{S.ma=document.getElementById('mau').checked;if(!S.ma)switchMask(S.curMI);}"
         "document.getElementById(w==='f'?'fb':w==='t'?'tb':'mmb')"
         ".classList.toggle('off',w==='f'?S.fa:w==='t'?S.ta:S.ma);upInfo();}"
         # Tracking click
@@ -694,10 +770,6 @@ def run_unified_web(
         "fetch('/api/frame/'+S.s).then(function(r){return r.json()}).then(function(d){"
         "var img=document.getElementById('timg');"
         "img.onload=function(){upDot()};img.src=d.url;});}"
-        # SAM set image
-        "function upSam(idx){"
-        "fetch('/api/sam/set_image',{method:'POST',headers:{'Content-Type':'application/json'},"
-        "body:JSON.stringify({idx:idx})});}"
         # SAM click
         "document.getElementById('mw').oncontextmenu=function(e){e.preventDefault()};"
         "document.getElementById('mw').onmousedown=function(ev){"
@@ -707,33 +779,53 @@ def run_unified_web(
         "var sx=img.naturalWidth/img.clientWidth,sy=img.naturalHeight/img.clientHeight;"
         "fetch('/api/sam/click',{method:'POST',headers:{'Content-Type':'application/json'},"
         "body:JSON.stringify({x:(ev.clientX-r.left)*sx,y:(ev.clientY-r.top)*sy,"
-        "label:ev.button===2?0:1,fi:S.m})});};"
+        "label:ev.button===2?0:1,fi:S.ms[S.curMI]})});};"
         # SAM undo
         "function samUndo(){"
         "fetch('/api/sam/undo',{method:'POST',headers:{'Content-Type':'application/json'},"
-        "body:JSON.stringify({fi:S.m})});}"
+        "body:JSON.stringify({fi:S.ms[S.curMI]})});}"
         # Poll SAM
         "function pollSam(){"
         "if(S.ma)return;"
         "fetch('/api/sam/state').then(function(r){return r.json()}).then(function(d){"
         "document.getElementById('mimg').src=d.overlay;"
         "document.getElementById('ms').textContent=d.status;"
-        "samPts=d.pts||0;upInfo();});}"
+        "samPtsMap[S.ms[S.curMI]]=d.pts||0;renderMTabs();upInfo();});}"
         "var samTimer=setInterval(pollSam,300);"
         # Info
         "function upInfo(){"
+        "var totalPts=0;S.ms.forEach(function(m){totalPts+=(samPtsMap[m]||0);});"
         "document.getElementById('fi').textContent="
-        "'起始帧: '+S.s+' | 结束帧: '+S.e+' | mask帧: '+S.m+' | 长度: '+(S.e-S.s+1);"
+        "'起始帧: '+S.s+' | 结束帧: '+S.e+' | mask帧: ['+S.ms.join(',')+'] | 长度: '+(S.e-S.s+1);"
         "document.getElementById('ti').textContent="
         "S.tx!==null?'追踪点: ('+S.tx.toFixed(1)+', '+S.ty.toFixed(1)+')':'追踪点: 未选择';"
         "document.getElementById('mi').textContent="
-        "S.ma?'mask: 使用默认':'mask: SAM'+(samPts>0?' ('+samPts+'点)':'');}"
+        "S.ma?'mask: 使用默认 ('+S.ms.length+'帧)':'mask: SAM '+S.ms.length+'帧, 共'+totalPts+'点';}"
+        # Dataset switch
+        "function switchDs(){"
+        "var sel=document.getElementById('ds');"
+        "fetch('/api/dataset/cameras?idx='+sel.value).then(function(r){return r.json()}).then(function(d){"
+        "var c=document.getElementById('cam');c.innerHTML='';"
+        "d.cameras.forEach(function(n){var o=document.createElement('option');o.value=n;o.textContent=n;c.appendChild(o);});});}"
+        "function loadDs(){"
+        "var di=document.getElementById('ds').value;"
+        "var cn=document.getElementById('cam').value;"
+        "document.getElementById('ds-status').textContent='加载中…';"
+        "fetch('/api/dataset/load',{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({dataset_idx:parseInt(di),camera:cn})})"
+        ".then(function(r){return r.json()}).then(function(d){"
+        "if(d.ok){document.getElementById('ds-status').textContent='已加载 '+d.n_frames+' 帧';"
+        "T=d.thumbs;S.s=0;S.e=d.n_frames-1;S.ms=[0];S.curMI=0;samPtsMap={0:0};"
+        "renderGrid();renderMTabs();upInfo();upTImg();}"
+        "else{document.getElementById('ds-status').textContent='加载失败: '+(d.error||'');}});}"
         # Submit
         "function go(){"
         "if(S.tx===null||S.ty===null){alert('请选择追踪点');return;}"
-        "if(!S.ma&&samPts===0){alert('请在 mask 区域点击选择');return;}"
+        "if(!S.ma){"
+        "var missing=[];S.ms.forEach(function(m){if(!samPtsMap[m]||samPtsMap[m]===0)missing.push(m);});"
+        "if(missing.length>0){alert('以下mask帧尚未标注: '+missing.join(', '));return;}}"
         "fetch('/api/done',{method:'POST',headers:{'Content-Type':'application/json'},"
-        "body:JSON.stringify({start:S.s,end:S.e,maskRef:S.m,"
+        "body:JSON.stringify({start:S.s,end:S.e,maskRefs:S.ms,"
         "trackingX:S.tx,trackingY:S.ty,maskAuto:S.ma,"
         "robotType:document.getElementById('rt')?document.getElementById('rt').value:''})})"
         ".then(function(){if(HP){"
@@ -745,13 +837,23 @@ def run_unified_web(
         "}else{document.body.innerHTML="
         "'<p style=\"text-align:center;margin-top:3rem;font-size:18px\">已提交，可关闭此页面。</p>';}});}"
         # Init
-        "renderGrid();upInfo();upDot();"
+        "renderGrid();renderMTabs();upInfo();upDot();"
         "if(!HDT){document.getElementById('tl').style.display='none';"
         "document.getElementById('tb').classList.remove('off');}"
         "if(!HDM){document.getElementById('ml').style.display='none';"
-        "document.getElementById('mmb').classList.remove('off');upSam(S.m);}"
+        "document.getElementById('mmb').classList.remove('off');switchMask(0);}"
         # Pipeline JS
-        "var pipeTimer;"
+        "var pipeTimer,pOverlays=[],pMaskIds=[],pCurOv=0;"
+        "function renderPTabs(){"
+        "var c=document.getElementById('p-mtabs');"
+        "if(pMaskIds.length<=1){c.style.display='none';return;}"
+        "c.style.display='flex';c.innerHTML='';"
+        "pMaskIds.forEach(function(m,i){"
+        "var b=document.createElement('div');b.className='mtab'+(i===pCurOv?' a':'');"
+        "b.textContent='帧 '+m;"
+        "b.onclick=function(){pCurOv=i;renderPTabs();"
+        "if(pOverlays[i]){var img=document.getElementById('p-img');img.src=pOverlays[i];img.style.display='';}};"
+        "c.appendChild(b);});}"
         "function pollPipe(){"
         "fetch('/api/pipeline/state').then(function(r){return r.json()}).then(function(d){"
         "if(!d||!d.stage)return;"
@@ -763,7 +865,12 @@ def run_unified_web(
         "else if(i===ci){el.className='ps active';}"
         "else{el.className='ps';}});"
         "if(d.step!==undefined)document.getElementById('p-step').textContent='('+d.step+'/'+(d.max_steps||'?')+')';"
-        "if(d.image){var img=document.getElementById('p-img');img.src=d.image;img.style.display='';}"
+        "if(d.overlays&&d.overlays.length>0){"
+        "pOverlays=d.overlays;"
+        "if(d.mask_ids)pMaskIds=d.mask_ids;"
+        "renderPTabs();"
+        "var img=document.getElementById('p-img');img.src=pOverlays[pCurOv];img.style.display='';}"
+        "else if(d.image){var img=document.getElementById('p-img');img.src=d.image;img.style.display='';}"
         "if(d.stage==='done'){clearInterval(pipeTimer);"
         "document.getElementById('fin-btn').style.display='block';"
         "document.getElementById('restart-btn').style.display='block';"
@@ -834,7 +941,6 @@ def run_unified_web(
                 with lock:
                     vpath = shared.get("pipeline", {}).get("video_path")
                 if vpath and os.path.isfile(vpath):
-                    import os
                     sz = os.path.getsize(vpath)
                     self.send_response(200)
                     self.send_header("Content-Type", "video/mp4")
@@ -844,6 +950,21 @@ def run_unified_web(
                         self.wfile.write(vf.read())
                 else:
                     self.send_error(404)
+            elif self.path.startswith("/api/dataset/cameras"):
+                # 返回指定数据集的 camera 列表
+                try:
+                    qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+                    params = dict(p.split("=") for p in qs.split("&") if "=" in p)
+                    idx = int(params.get("idx", "0"))
+                    cams = datasets_info[idx].get("cameras", []) if datasets_info and idx < len(datasets_info) else []
+                    out = json.dumps({"cameras": cams}).encode("utf-8")
+                except Exception:
+                    out = json.dumps({"cameras": []}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
             else:
                 self.send_error(404)
 
@@ -851,13 +972,37 @@ def run_unified_web(
             cl = int(self.headers.get("Content-Length", "0"))
             raw = self.rfile.read(cl) if cl else b"{}"
             p = self.path.split("?")[0]
-            if p in ("/api/sam/click", "/api/sam/undo", "/api/sam/set_image", "/api/done", "/api/finish", "/api/restart"):
+            if p in ("/api/sam/click", "/api/sam/undo", "/api/sam/set_image",
+                      "/api/sam/switch_frame", "/api/done", "/api/finish",
+                      "/api/restart", "/api/dataset/load"):
                 cmd_q.put((p, raw))
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"{}")
+                if p == "/api/dataset/load":
+                    # 数据集加载需要等待结果
+                    try:
+                        resp = shared.get("_ds_resp_q", queue.Queue()).get(timeout=60)
+                    except queue.Empty:
+                        resp = {"ok": False, "error": "timeout"}
+                    out = json.dumps(resp).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(out)))
+                    self.end_headers()
+                    self.wfile.write(out)
+                else:
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"{}")
             else:
                 self.send_error(404)
+
+    # ── 当前活跃帧索引 ──
+    active_frame_idx = first_mask_ref
+
+    def _get_frame_sam(fi):
+        """获取帧 fi 的 SAM 状态，不存在则初始化。"""
+        if fi not in per_frame_sam:
+            per_frame_sam[fi] = {"points": [], "labels": [], "mask": None}
+        return per_frame_sam[fi]
 
     # ── Start server ──
     srv = HTTPServer((host, port), H)
@@ -881,54 +1026,125 @@ def run_unified_web(
             if path == "/api/sam/set_image":
                 idx = int(json.loads(raw)["idx"])
                 set_image_fn(Image.fromarray(frames[idx]))
-                sam_points.clear()
-                sam_labels.clear()
-                current_mask = None
+                active_frame_idx = idx
+                fs = _get_frame_sam(idx)
+                fs["points"].clear()
+                fs["labels"].clear()
+                fs["mask"] = None
                 with lock:
                     shared["overlay"] = _image_to_data_url(frames[idx])
                     shared["status"] = f"已切换到帧 {idx}"
                     shared["pts"] = 0
 
+            elif path == "/api/sam/switch_frame":
+                fi = int(json.loads(raw)["fi"])
+                set_image_fn(Image.fromarray(frames[fi]))
+                active_frame_idx = fi
+                fs = _get_frame_sam(fi)
+                with lock:
+                    if fs["mask"] is not None:
+                        shared["overlay"] = _ov(frames[fi], fs["mask"], fs["points"], fs["labels"])
+                    else:
+                        shared["overlay"] = _ov(frames[fi], None, fs["points"], fs["labels"])
+                    shared["status"] = f"帧 {fi}: {len(fs['points'])} 点"
+                    shared["pts"] = len(fs["points"])
+
             elif path == "/api/sam/click":
                 d = json.loads(raw)
-                sam_points.append([float(d["x"]), float(d["y"])])
-                sam_labels.append(int(d.get("label", 1)))
-                pts = np.array(sam_points, dtype=np.float32)
-                lbs = np.array(sam_labels, dtype=np.int32)
-                current_mask = predict_fn(pts, lbs)
-                fi = int(d.get("fi", default_mask_ref))
+                fi = int(d.get("fi", active_frame_idx))
+                if fi != active_frame_idx:
+                    set_image_fn(Image.fromarray(frames[fi]))
+                    active_frame_idx = fi
+                fs = _get_frame_sam(fi)
+                fs["points"].append([float(d["x"]), float(d["y"])])
+                fs["labels"].append(int(d.get("label", 1)))
+                pts = np.array(fs["points"], dtype=np.float32)
+                lbs = np.array(fs["labels"], dtype=np.int32)
+                fs["mask"] = predict_fn(pts, lbs)
                 with lock:
-                    shared["overlay"] = _ov(frames[fi], current_mask, sam_points, sam_labels)
-                    shared["status"] = f"点数 {len(sam_points)}"
-                    shared["pts"] = len(sam_points)
+                    shared["overlay"] = _ov(frames[fi], fs["mask"], fs["points"], fs["labels"])
+                    shared["status"] = f"帧 {fi}: {len(fs['points'])} 点"
+                    shared["pts"] = len(fs["points"])
 
             elif path == "/api/sam/undo":
-                if sam_points:
-                    sam_points.pop()
-                    sam_labels.pop()
                 d = json.loads(raw) if raw else {}
-                fi = int(d.get("fi", default_mask_ref))
-                if sam_points:
-                    pts = np.array(sam_points, dtype=np.float32)
-                    lbs = np.array(sam_labels, dtype=np.int32)
-                    current_mask = predict_fn(pts, lbs)
+                fi = int(d.get("fi", active_frame_idx))
+                if fi != active_frame_idx:
+                    set_image_fn(Image.fromarray(frames[fi]))
+                    active_frame_idx = fi
+                fs = _get_frame_sam(fi)
+                if fs["points"]:
+                    fs["points"].pop()
+                    fs["labels"].pop()
+                if fs["points"]:
+                    pts = np.array(fs["points"], dtype=np.float32)
+                    lbs = np.array(fs["labels"], dtype=np.int32)
+                    fs["mask"] = predict_fn(pts, lbs)
                 else:
-                    current_mask = None
+                    fs["mask"] = None
                 with lock:
-                    shared["overlay"] = _ov(frames[fi], current_mask, sam_points, sam_labels)
-                    shared["status"] = f"撤销后 {len(sam_points)} 点"
-                    shared["pts"] = len(sam_points)
+                    shared["overlay"] = _ov(frames[fi], fs["mask"], fs["points"], fs["labels"])
+                    shared["status"] = f"帧 {fi}: 撤销后 {len(fs['points'])} 点"
+                    shared["pts"] = len(fs["points"])
+
+            elif path == "/api/dataset/load":
+                d = json.loads(raw)
+                ds_resp_q = queue.Queue()
+                with lock:
+                    shared["_ds_resp_q"] = ds_resp_q
+                try:
+                    di = int(d["dataset_idx"])
+                    cam = d.get("camera", "")
+                    if datasets_info and di < len(datasets_info):
+                        ds = datasets_info[di]
+                        load_fn = ds.get("load_fn")
+                        if load_fn:
+                            new_frames = load_fn(cam)
+                            if new_frames is not None:
+                                frames = new_frames
+                                n = len(frames)
+                                new_thumbs = [_image_to_thumb_url(f) for f in frames]
+                                thumbs_json = json.dumps(new_thumbs)
+                                per_frame_sam.clear()
+                                active_frame_idx = 0
+                                set_image_fn(Image.fromarray(frames[0]))
+                                with lock:
+                                    shared["overlay"] = _image_to_data_url(frames[0])
+                                    shared["status"] = "左键=前景 右键=背景"
+                                    shared["pts"] = 0
+                                ds_resp_q.put({"ok": True, "n_frames": n, "thumbs": new_thumbs})
+                            else:
+                                ds_resp_q.put({"ok": False, "error": "加载失败"})
+                        else:
+                            ds_resp_q.put({"ok": False, "error": "无 load_fn"})
+                    else:
+                        ds_resp_q.put({"ok": False, "error": "无效索引"})
+                except Exception as exc:
+                    ds_resp_q.put({"ok": False, "error": str(exc)})
 
             elif path == "/api/done":
                 d = json.loads(raw)
                 mask_auto = d.get("maskAuto", False)
-                final_mask = default_mask.copy() if mask_auto and default_mask is not None else current_mask
+                mask_refs = [int(x) for x in d.get("maskRefs", d.get("maskRef", []))]
+                if isinstance(mask_refs, int):
+                    mask_refs = [mask_refs]
+
+                if mask_auto and default_masks is not None:
+                    final_masks = [m.copy() for m in default_masks]
+                else:
+                    final_masks = []
+                    for mfi in mask_refs:
+                        fs = _get_frame_sam(mfi)
+                        final_masks.append(fs["mask"])
+
                 result["val"] = {
                     "start": int(d["start"]),
                     "end": int(d["end"]),
-                    "mask_ref": int(d["maskRef"]),
+                    "mask_refs": mask_refs,
+                    "mask_ref": mask_refs[0],  # 兼容旧接口
                     "tracking_point": (float(d["trackingX"]), float(d["trackingY"])),
-                    "mask": final_mask,
+                    "masks": final_masks,
+                    "mask": final_masks[0] if final_masks else None,  # 兼容旧接口
                     "robot_type": d.get("robotType", default_robot_type),
                 }
                 break  # 退出标注循环
@@ -941,6 +1157,11 @@ def run_unified_web(
             def _update(state):
                 if "image" in state and isinstance(state["image"], np.ndarray):
                     state["image"] = _image_to_data_url(state["image"])
+                if "overlays" in state and isinstance(state["overlays"], list):
+                    state["overlays"] = [
+                        _image_to_data_url(ov) if isinstance(ov, np.ndarray) else ov
+                        for ov in state["overlays"]
+                    ]
                 with lock:
                     shared["pipeline"] = state
 
@@ -973,10 +1194,9 @@ def run_unified_web(
 
         # 如果是 restart，重置状态
         if not session_done:
-            sam_points.clear()
-            sam_labels.clear()
-            current_mask = None
-            set_image_fn(Image.fromarray(frames[default_mask_ref]))
+            per_frame_sam.clear()
+            active_frame_idx = first_mask_ref
+            set_image_fn(Image.fromarray(frames[first_mask_ref]))
             with lock:
                 shared["overlay"] = mask_url
                 shared["status"] = "左键=前景 右键=背景"
