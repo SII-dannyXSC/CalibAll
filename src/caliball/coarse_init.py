@@ -29,6 +29,15 @@ class CoarseInit:
         
         self._init_intrinsic()
 
+    def update_robot(self, config):
+        """切换 robot type，只更新 FK 模型（不重新加载 DINOv2/CoTracker）。"""
+        self.robot_config = build_robot_config(config)
+        self.robot_tf = build_robot(config, self.robot_config)
+
+    def reset_intrinsic(self):
+        """切换数据集/camera 后重置内参缓存，使其在下次 get_extrinsic 时重新估计。"""
+        self._intrinsic = None
+
     def to(self, device):
         self.recognizer.to(device)
         self.point_tracker.to(device)
@@ -57,7 +66,7 @@ class CoarseInit:
 
     def get_extrinsic(self, video, joint_angles, tracking_point=None, img_idx=0,
                       method=cv2.SOLVEPNP_EPNP, save_path=None, init_w2c=None,
-                      return_details=False):
+                      return_details=False, arm_index=0):
         img_pil = Image.fromarray(video[img_idx])
 
         if tracking_point is not None:
@@ -70,10 +79,10 @@ class CoarseInit:
             self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
 
         K = self._get_intrinsic(img_pil)
-        hom = np.array([self.robot_tf.fkine_eef(q)[0] for q in joint_angles])  # (T, 4, 4)
+        hom = np.array([self.robot_tf.fkine_eef(q)[0] for q in joint_angles])  # (T, 4, 4) or (T, 2, 4, 4)
         if hom.ndim == 4:
-            # 双臂 (T, 2, 4, 4)：默认用左臂 TCP 与单点 2D 跟踪对齐
-            hom = hom[:, 0, ...]
+            # 双臂 (T, 2, 4, 4)：用 arm_index 选择指定臂
+            hom = hom[:, arm_index, ...]
         points_3d = hom[:, :3, 3]
         extrinsic = self.pnp_solver(
             points_3d=points_3d, points_2d=points_2d,

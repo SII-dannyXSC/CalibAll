@@ -10,6 +10,7 @@ from src.caliball.pipeline.rendering_optimizer import RBSolver
 from src.caliball.robot import build_robot
 from src.caliball.config import build_robot_config
 from src.caliball.utils.image import add_mask
+from src.caliball.utils.mesh_loader import _get_mesh_paths
 from src.caliball.utils.sam3_extractor import Sam3Extractor
 
 class Refinement:
@@ -19,9 +20,15 @@ class Refinement:
 
         self.robot_config = build_robot_config(config)
         self.robot_tf = build_robot(config, self.robot_config)
-        self.mesh_paths = self.robot_config.mesh_paths
+        self.mesh_paths = _get_mesh_paths(self.robot_config)
 
         self.sam3_extractor = Sam3Extractor(bpe_path=config.bpe_path, ckpt_path=config.ckpt_path)
+
+    def update_robot(self, config):
+        """切换 robot type，只更新 FK 模型和 mesh（不重新加载 SAM3）。"""
+        self.robot_config = build_robot_config(config)
+        self.robot_tf = build_robot(config, self.robot_config)
+        self.mesh_paths = _get_mesh_paths(self.robot_config)
 
     def _to_float_tensor(self, value):
         if isinstance(value, torch.Tensor):
@@ -29,7 +36,13 @@ class Refinement:
         return torch.as_tensor(value, dtype=torch.float32, device=self.device)
 
     def _prepare_link_poses(self, joint_angles):
-        link_poses_list = self.robot_tf.fkine_all(joint_angles)
+        q = np.asarray(joint_angles).squeeze()  # (1, n_joints) → (n_joints,)
+        link_poses_list = self.robot_tf.fkine_all(q)
+        # 双臂: (2, n_links, 4, 4) → 合并为 (1, n_left+n_right, 4, 4)
+        if link_poses_list.shape[0] == 2 and link_poses_list.ndim == 4:
+            link_poses_list = np.concatenate(
+                [link_poses_list[0], link_poses_list[1]], axis=0
+            )[np.newaxis]
         return torch.as_tensor(link_poses_list, dtype=torch.float32, device=self.device)
 
     def _prepare_mask_tensor(self, mask):
@@ -71,7 +84,7 @@ class Refinement:
 
         return result, loss_dict
 
-    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0, progress_callback=None):
+    def refine(self, video, joint_angles, intrinsic, extrinsic, base_path, mask=None, max_steps=3000, mask_id=0, progress_callback=None, stop_check=None):
         """
         支持单帧或多帧 mask：
           - mask_id: int 或 list[int]
@@ -119,11 +132,18 @@ class Refinement:
             "K": self._to_float_tensor(intrinsic).unsqueeze(0),
         }
 
-        pose_optimizer =  torch.optim.Adam(
+        pose_optimizer = torch.optim.Adam(
             solver.parameters(),
-            lr=1e-4,
+            lr=5e-4,
             weight_decay=1e-6,
         )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            pose_optimizer, T_0=2000, T_mult=2, eta_min=1e-5,
+        )
+
+        # Best checkpoint 追踪
+        best_loss = float('inf')
+        best_dof = solver.dof.detach().clone()
 
         os.makedirs(base_path, exist_ok=True)
         for k in range(max_steps):
@@ -132,21 +152,45 @@ class Refinement:
             output, loss_dict = solver.forward(dps)
             if k == 0:
                 print("[refine] 第一次 forward 完成")
-            loss = loss_dict["mask_loss"]
+
+            # 改进的损失函数：MSE + IoU（覆盖 RBSolver 的 mask_loss）
+            rendered = output["rendered_masks"]  # (B, H, W)
+            gt = dps["mask"]  # (B, H, W)
+            mse_loss = ((rendered - gt) ** 2).mean()
+            intersection = (rendered * gt).sum(dim=(1, 2))
+            union = rendered.sum(dim=(1, 2)) + gt.sum(dim=(1, 2)) - intersection
+            iou_loss = (1 - intersection / (union + 1e-6)).mean()
+            loss = mse_loss + 0.5 * iou_loss
+
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(solver.parameters(), max_norm=1.0)
             pose_optimizer.step()
             pose_optimizer.zero_grad(set_to_none=True)
+            scheduler.step(k)
+
+            # 更新 best checkpoint
+            loss_val = loss.item()
+            if loss_val < best_loss:
+                best_loss = loss_val
+                best_dof = solver.dof.detach().clone()
+
+            # 检查是否用户请求停止
+            if stop_check is not None and stop_check():
+                print(f"[refine] 用户请求停止 (step={k}, best_loss={best_loss:.6f})")
+                break
+
             if k % 100 == 0:
-                print(k, loss)
+                lr_now = pose_optimizer.param_groups[0]["lr"]
+                print(f"{k}  loss={loss_val:.6f}  mse={mse_loss.item():.6f}  iou_l={iou_loss.item():.6f}  lr={lr_now:.2e}  best={best_loss:.6f}")
                 tsfm = output["tsfm"]
-                loss = loss.detach().cpu()
+                loss_cpu = loss.detach().cpu()
 
                 save_path = os.path.join(base_path, f"{k}")
                 pred_mask_path = os.path.join(base_path, f"pred_mask")
                 os.makedirs(save_path, exist_ok=True)
                 os.makedirs(pred_mask_path, exist_ok=True)
                 with open(os.path.join(save_path, 'loss.txt'), 'w') as f:
-                    f.write(str(loss))
+                    f.write(f"loss={loss_val:.6f} mse={mse_loss.item():.6f} iou={iou_loss.item():.6f} best={best_loss:.6f}")
                 with open(os.path.join(save_path, 'tsfm.txt'), 'w') as f:
                     f.write(str(tsfm))
                 with open(os.path.join(save_path, 'intrinsic.txt'), 'w') as f:
@@ -178,7 +222,17 @@ class Refinement:
                     overlays_rgb.append(overlay[:, :, ::-1])  # BGR → RGB
 
                 if progress_callback is not None:
-                    progress_callback(step=k, max_steps=max_steps, loss=float(loss),
+                    progress_callback(step=k, max_steps=max_steps, loss=float(loss_val),
                                       overlay=overlays_rgb[0],
                                       overlays=overlays_rgb, mask_ids=mask_ids)
+
+        # 恢复 best checkpoint
+        with torch.no_grad():
+            solver.dof.copy_(best_dof)
+            solver.history_ops.zero_()  # 重置 history buffer
+        print(f"[refine] 已恢复 best checkpoint (loss={best_loss:.6f})")
+
+        # 用 best 参数做最终 forward
+        with torch.no_grad():
+            output, loss_dict = solver.forward(dps)
         return output, loss_dict

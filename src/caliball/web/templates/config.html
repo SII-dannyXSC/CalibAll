@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>数据集配置</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:14px;font-weight:600;margin-bottom:4px}
+.f input,.f select{width:100%;padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:4px}
+.row{display:flex;gap:12px}.row .f{flex:1}
+.scan-row{display:flex;gap:8px;align-items:flex-end}
+.scan-row .f{flex:1;margin-bottom:0}
+.scan-row button{padding:8px 16px;font-size:14px;cursor:pointer;white-space:nowrap;
+  border:1px solid #06f;background:#06f;color:#fff;border-radius:4px}
+#go{display:block;margin:20px auto;padding:12px 40px;font-size:16px;
+  cursor:pointer;background:#334;color:#fff;border:none;border-radius:6px}
+#msg{text-align:center;margin-top:8px;font-size:14px}
+.ok{color:#090}.err{color:#c00}
+</style>
+</head>
+<body>
+<h2>数据集配置</h2>
+
+<!-- task-path + 扫描 -->
+<div class="scan-row" style="margin-bottom:12px">
+  <div class="f">
+    <label>数据集路径 (task-path)</label>
+    <input id="tp" placeholder="/path/to/lerobot_dataset/task_name"
+           value="{{ default_task_path }}"/>
+  </div>
+  <button onclick="scanPath()" style="margin-bottom:0">扫描</button>
+</div>
+<p id="scan-msg" style="font-size:13px;margin:0 0 8px 0"></p>
+
+<!-- dataset-name / camera -->
+<div class="row">
+  <div class="f">
+    <label>dataset-name（自动推断，可修改）</label>
+    <input id="dn" placeholder="如 robomind.franka_3rgb"
+           value="{{ default_dataset_name }}"/>
+  </div>
+  <div class="f">
+    <label>camera-name</label>
+    <select id="cn"><option value="">请先扫描路径</option></select>
+  </div>
+</div>
+
+<!-- robot-type / episode -->
+<div class="row">
+  <div class="f">
+    <label>机型 (robot-type)</label>
+    <select id="rt">
+      {% for rt in robot_types %}
+      <option value="{{ rt }}" {{ 'selected' if rt == default_robot_type else '' }}>{{ rt }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="f">
+    <label>episode-idx</label>
+    <input id="ei" type="number" value="{{ default_episode_idx }}"/>
+  </div>
+</div>
+
+<!-- state_key with dimension range -->
+<div class="row">
+  <div class="f" style="flex:2">
+    <label>state_key (关节数据列)</label>
+    <select id="stk" onchange="onStkChange()"><option value="">请先扫描路径</option></select>
+  </div>
+  <div class="f" style="flex:0.5">
+    <label>start</label>
+    <input id="stk-start" type="number" value="0" min="0"/>
+  </div>
+  <div class="f" style="flex:0.5">
+    <label>end</label>
+    <input id="stk-end" type="number" value="" placeholder="all"/>
+  </div>
+  <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
+    <span id="stk-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
+  </div>
+</div>
+
+<!-- 双臂: 第二个 state_key -->
+<div id="dual-arm-row" class="row" style="display:none">
+  <div class="f" style="flex:2">
+    <label>state_key 2 (右臂关节)</label>
+    <select id="stk2" onchange="onStk2Change()"><option value="">请先扫描路径</option></select>
+  </div>
+  <div class="f" style="flex:0.5">
+    <label>start</label>
+    <input id="stk2-start" type="number" value="0" min="0"/>
+  </div>
+  <div class="f" style="flex:0.5">
+    <label>end</label>
+    <input id="stk2-end" type="number" value="" placeholder="all"/>
+  </div>
+  <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
+    <span id="stk2-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
+  </div>
+</div>
+
+<!-- strike -->
+<div class="row">
+  <div class="f">
+    <label>strike (抽帧间隔)</label>
+    <input id="sk" type="number" value="{{ default_strike }}"/>
+  </div>
+</div>
+
+<button id="go" onclick="go()">加载数据集</button>
+<p id="msg"></p>
+
+<script>
+var DUAL_ARM_ROBOTS = {{ dual_arm_robots | tojson }};
+var isDualArm = false;
+
+function checkDualArm() {
+  var rt = document.getElementById('rt').value;
+  isDualArm = DUAL_ARM_ROBOTS.indexOf(rt) >= 0;
+  document.getElementById('dual-arm-row').style.display = isDualArm ? 'flex' : 'none';
+  // Update label
+  var stkLabel = document.querySelector('#stk').closest('.f').querySelector('label');
+  stkLabel.textContent = isDualArm ? 'state_key (左臂关节)' : 'state_key (关节数据列)';
+}
+document.getElementById('rt').addEventListener('change', checkDualArm);
+
+function onStkChange() {
+  var sel = document.getElementById('stk');
+  var opt = sel.options[sel.selectedIndex];
+  var dim = opt ? (opt.dataset.dim || '') : '';
+  document.getElementById('stk-dim').textContent = dim ? '总维度: ' + dim : '';
+  document.getElementById('stk-start').value = 0;
+  document.getElementById('stk-end').value = dim || '';
+  document.getElementById('stk-end').placeholder = dim || 'all';
+}
+
+function onStk2Change() {
+  var sel = document.getElementById('stk2');
+  var opt = sel.options[sel.selectedIndex];
+  var dim = opt ? (opt.dataset.dim || '') : '';
+  document.getElementById('stk2-dim').textContent = dim ? '总维度: ' + dim : '';
+  document.getElementById('stk2-start').value = 0;
+  document.getElementById('stk2-end').value = dim || '';
+  document.getElementById('stk2-end').placeholder = dim || 'all';
+}
+
+function scanPath() {
+  var tp = document.getElementById('tp').value.trim();
+  if (!tp) { document.getElementById('scan-msg').textContent = '请先输入路径'; return; }
+  document.getElementById('scan-msg').textContent = '扫描中…';
+  document.getElementById('scan-msg').className = '';
+  fetch('/api/scan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({task_path: tp})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.cameras && d.cameras.length > 0) {
+      var cn = document.getElementById('cn');
+      cn.innerHTML = '';
+      d.cameras.forEach(function(c) {
+        var o = document.createElement('option');
+        o.value = c; o.textContent = c;
+        cn.appendChild(o);
+      });
+      if (d.dataset_name) document.getElementById('dn').value = d.dataset_name;
+      if (d.state_keys && d.state_keys.length > 0) {
+        // Populate both state_key dropdowns
+        ['stk', 'stk2'].forEach(function(id) {
+          var sel = document.getElementById(id);
+          sel.innerHTML = '';
+          d.state_keys.forEach(function(k) {
+            var o = document.createElement('option');
+            o.value = k.name; o.textContent = k.name + ' [dim=' + k.dim + ']';
+            o.dataset.dim = k.dim;
+            sel.appendChild(o);
+          });
+        });
+        onStkChange();
+        // Auto-select right arm key for stk2 (prefer *_right if available)
+        var stk2 = document.getElementById('stk2');
+        for (var i = 0; i < stk2.options.length; i++) {
+          if (stk2.options[i].value.indexOf('right') >= 0 && stk2.options[i].value.indexOf('joint_position') >= 0) {
+            stk2.selectedIndex = i; break;
+          }
+        }
+        onStk2Change();
+      }
+      document.getElementById('scan-msg').textContent = '找到 ' + d.cameras.length + ' 个 camera';
+      document.getElementById('scan-msg').className = 'ok';
+    } else {
+      document.getElementById('scan-msg').textContent = d.error || '未找到 camera';
+      document.getElementById('scan-msg').className = 'err';
+    }
+  });
+}
+
+function go() {
+  var tp = document.getElementById('tp').value.trim();
+  var dn = document.getElementById('dn').value.trim();
+  var cn = document.getElementById('cn').value;
+  if (!tp) { document.getElementById('msg').textContent = '请填写数据集路径'; document.getElementById('msg').className = 'err'; return; }
+  if (!cn) { document.getElementById('msg').textContent = '请先扫描路径并选择 camera'; document.getElementById('msg').className = 'err'; return; }
+  if (!dn) dn = tp.split('/').filter(Boolean).slice(-2, -1)[0] || 'unknown';
+
+  document.getElementById('go').disabled = true;
+  document.getElementById('go').textContent = '加载中…';
+
+  var payload = {
+    task_path: tp,
+    dataset_name: dn,
+    camera_name: cn,
+    robot_type: document.getElementById('rt').value,
+    state_key: document.getElementById('stk').value,
+    state_key_start: parseInt(document.getElementById('stk-start').value) || 0,
+    state_key_end: parseInt(document.getElementById('stk-end').value) || null,
+    episode_idx: parseInt(document.getElementById('ei').value) || 0,
+    strike: parseInt(document.getElementById('sk').value) || 4,
+    is_dual_arm: isDualArm
+  };
+
+  if (isDualArm) {
+    payload.state_key_2 = document.getElementById('stk2').value;
+    payload.state_key_2_start = parseInt(document.getElementById('stk2-start').value) || 0;
+    payload.state_key_2_end = parseInt(document.getElementById('stk2-end').value) || null;
+  }
+
+  fetch('/api/config/submit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      document.body.innerHTML =
+        '<div style="max-width:600px;margin:3rem auto;text-align:center;font-family:system-ui">' +
+        '<h2>模型加载中</h2>' +
+        '<p id="ls" style="font-size:16px;color:#334">准备中…</p>' +
+        '<div style="background:#eee;border-radius:8px;height:8px;margin:16px 0">' +
+        '<div id="lb" style="background:#06f;height:100%;border-radius:8px;width:0%;transition:width 0.3s"></div></div>' +
+        '<p id="ld" style="font-size:13px;color:#999"></p></div>';
+      var lt = setInterval(function() {
+        fetch('/api/loading_status').then(function(r) { return r.json(); }).then(function(s) {
+          document.getElementById('ls').textContent = s.message || '加载中…';
+          if (s.progress !== undefined) document.getElementById('lb').style.width = s.progress + '%';
+          if (s.detail) document.getElementById('ld').textContent = s.detail;
+          if (s.done) {
+            clearInterval(lt);
+            document.getElementById('ls').textContent = '加载完成！正在跳转…';
+            document.getElementById('lb').style.width = '100%';
+            setTimeout(function(){ window.location.href = '/annotate'; }, 500);
+          }
+        });
+      }, 500);
+    } else {
+      document.getElementById('msg').textContent = d.error || '加载失败';
+      document.getElementById('msg').className = 'err';
+      document.getElementById('go').disabled = false;
+      document.getElementById('go').textContent = '加载数据集';
+    }
+  });
+}
+// Init
+checkDualArm();
+</script>
+</body>
+</html>

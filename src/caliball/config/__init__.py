@@ -37,6 +37,12 @@ def build_robot_config(config):
         return _load_composite_config("arm/fr3.yaml", "gripper/panda_hand.yaml")
     elif robot_type == "xarm7_with_gripper":
         return OmegaConf.load(os.path.join(CUR_DIR, "robot/xarm7_with_gripper.yaml"))
+    else:
+        # 通用 fallback：尝试加载 robot/{robot_type}.yaml
+        fallback = os.path.join(CUR_DIR, "robot", f"{robot_type}.yaml")
+        if os.path.isfile(fallback):
+            return OmegaConf.load(fallback)
+        raise ValueError(f"不支持的 robot_type: {robot_type}（无匹配配置文件）")
 
 
 def compose_job_config(

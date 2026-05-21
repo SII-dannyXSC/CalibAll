@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -40,7 +41,7 @@ if _sam3_root.is_dir() and str(_sam3_root) not in sys.path:
     sys.path.insert(0, str(_sam3_root))
 
 from src.caliball.dataset.lerobot_dataset import LeRobotDataset
-from src.caliball.utils.web_interaction import run_unified_web
+from src.caliball.utils.web_interaction import run_unified_web, run_dataset_config_web
 
 
 def ensure_dir(path: Path | str) -> Path:
@@ -176,7 +177,7 @@ def parse_args():
     p.add_argument("--episode-idx", type=int, default=0)
     p.add_argument("--strike", type=int, default=4)
     p.add_argument("--start-idx", type=int, default=0)
-    p.add_argument("--end-idx", type=int, default=39)
+    p.add_argument("--end-idx", type=int, default=None, help="结束帧索引，默认为视频末尾")
     p.add_argument("--mask-frame-idx", type=int, default=None, help="单个 mask 参考帧索引（向后兼容）")
     p.add_argument("--mask-frame-idxs", type=int, nargs="+", default=None, help="多个 mask 参考帧索引，如 --mask-frame-idxs 0 5 10")
     p.add_argument(
@@ -262,11 +263,78 @@ def main():
             if not args.camera_name and ds0.get("cameras"):
                 args.camera_name = ds0["cameras"][0]
 
-    if not args.task_path or not args.dataset_name or not args.camera_name:
-        raise SystemExit("需要 --task-path, --dataset-name, --camera-name（或使用 --config / --data-root）")
+    if not args.config:
+        # ── 非 config 模式：始终显示 Web 配置页面（预填 CLI 参数） ──
+        import yaml
+        _dataset_configs = []
+        for cfg_path in sorted((_PROJECT_ROOT / "src" / "caliball" / "config").glob("*.yaml")):
+            if cfg_path.stem == "models":
+                continue
+            try:
+                with open(cfg_path) as _f:
+                    _cfg = yaml.safe_load(_f)
+                rt = ""
+                defaults = _cfg.get("defaults", [])
+                for d in defaults:
+                    if isinstance(d, dict) and "robot" in d:
+                        rt = d["robot"]
+                _dataset_configs.append({
+                    "name": cfg_path.stem,
+                    "robot_type": rt,
+                    "dataset_name": _cfg.get("calib_dataset_name", _cfg.get("dataset_name", "")),
+                })
+            except Exception:
+                pass
+        _robot_types = []
+        for _rp in sorted((_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml")):
+            try:
+                _rc = yaml.safe_load(_rp.read_text())
+                defaults = _rc.get("defaults", [])
+                has_arm = any(isinstance(d, str) and "arm/" in d for d in defaults)
+                has_gripper = any(isinstance(d, str) and "gripper/" in d for d in defaults)
+                if not (has_arm and has_gripper):
+                    _robot_types.append(_rp.stem)
+            except Exception:
+                pass
+
+        print("启动 Web 配置页面…")
+        web_cfg, _loading_update, _loading_close = run_dataset_config_web(
+            dataset_configs=_dataset_configs,
+            robot_types=_robot_types,
+            default_robot_type=args.robot_type,
+            default_task_path=args.task_path or "",
+            default_dataset_name=args.dataset_name or "",
+            default_camera_name=args.camera_name or "",
+            default_episode_idx=args.episode_idx,
+            default_strike=args.strike,
+            default_start_idx=args.start_idx,
+            default_end_idx=args.end_idx,
+            host=args.host,
+            port=args.tracking_port,
+            open_browser=not args.no_browser,
+        )
+        args.task_path = web_cfg["task_path"]
+        args.dataset_name = web_cfg["dataset_name"]
+        args.camera_name = web_cfg["camera_name"]
+        args.robot_type = web_cfg.get("robot_type", args.robot_type)
+        args.episode_idx = web_cfg.get("episode_idx", args.episode_idx)
+        args.strike = web_cfg.get("strike", args.strike)
+        args.start_idx = web_cfg.get("start_idx", args.start_idx)
+        args.end_idx = web_cfg.get("end_idx", args.end_idx)
+        args.state_key = web_cfg.get("state_key") or args.state_key
+        print(f"Web 配置: task_path={args.task_path}, dataset={args.dataset_name}, camera={args.camera_name}")
+    else:
+        # config 模式无加载页面
+        _loading_update = lambda msg, progress=0, detail="": print(f"[loading] {msg}")
+        _loading_close = lambda: None
+
+    _loading_update("加载数据集…", 5)
 
     task_path = args.task_path
     task_name = args.task_name or Path(task_path).name
+    # dataset_name 自动从 task_path 父目录推断
+    if not args.dataset_name:
+        args.dataset_name = Path(task_path).parent.name
     camera_key = args.camera_name
 
     frame_export_dir = Path(args.frame_export_dir)
@@ -304,11 +372,16 @@ def main():
         "state_key": args.state_key,
     }
 
-    dataset = LeRobotDataset(task_path, state_key=args.state_key)
-    episode = dataset[args.episode_idx]
-    video = episode["videos"][camera_key]
-    joint_angles = episode["states"]
-    actions = episode.get("actions")
+    _loading_update("加载数据集…", 10, f"{task_path}")
+    try:
+        dataset = LeRobotDataset(task_path, state_key=args.state_key, episodes=[args.episode_idx])
+        episode = dataset[0]
+        video = episode["videos"][camera_key]
+        joint_angles = episode["states"]
+        actions = episode.get("actions")
+    except Exception as e:
+        _loading_close()
+        raise SystemExit(f"数据集加载失败: {e}\n  task_path={task_path}\n  camera={camera_key}\n  episode={args.episode_idx}")
 
     video = video[:: args.strike]
     joint_angles = joint_angles[:: args.strike]
@@ -332,12 +405,11 @@ def main():
         save_video_frames(video, episode_frame_dir, start_idx=0, end_idx=n_frames - 1)
         verify_exported_frames(episode_frame_dir, n_frames)
         print(f"已写入并校验 {n_frames} 张帧 -> {episode_frame_dir}")
-        print("本次仅导出图片；请再次运行同一命令以进行选点、SAM 与保存 manual_label。")
-        sys.exit(0)
 
     # ── 确定默认值 ──
     start_idx = int(args.start_idx)
-    end_idx = int(args.end_idx)
+    end_idx = int(args.end_idx) if args.end_idx is not None else len(video) - 1
+    end_idx = min(end_idx, len(video) - 1)  # 不超过视频长度
 
     # 多帧 mask：优先 --mask-frame-idxs，其次 --mask-frame-idx，默认 [start_idx]
     if args.mask_frame_idxs is not None:
@@ -367,15 +439,27 @@ def main():
     model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
     model_config.robot_type = args.robot_type
 
+    _loading_update("加载 CoarseInit（DINOv2 + CoTracker）…", 30, "这可能需要几分钟")
     print("加载 CoarseInit（DINOv2 + CoTracker）…")
-    _coarse_init = CoarseInit(config=model_config)
-    _coarse_init.to(args.device)
+    try:
+        _coarse_init = CoarseInit(config=model_config)
+        _coarse_init.to(args.device)
+    except Exception as e:
+        _loading_close()
+        raise SystemExit(f"CoarseInit 加载失败（robot_type={args.robot_type}）: {e}")
 
+    _loading_update("加载 Refinement…", 60)
     print("加载 Refinement…")
-    _refinement_init = Refinement(config=model_config)
+    try:
+        _refinement_init = Refinement(config=model_config)
+    except Exception as e:
+        _loading_close()
+        raise SystemExit(f"Refinement 加载失败（robot_type={args.robot_type}）: {e}")
     print("所有模型已加载")
 
     # ── 构造 Pipeline 函数（config 模式与 web 模式共享） ──
+    _pipeline_stop = threading.Event()  # 用于用户提前终止 refine
+
     def pipeline_fn(annotate_result, update_fn):
         """标注完成后运行 tracking → coarse → refine，通过 update_fn 报告进度。"""
 
@@ -395,6 +479,11 @@ def main():
         clip_joint = joint_angles[s : e + 1]
         mask_ids = [mr - s for mr in mask_refs]
         print(f"[pipeline] clip: [{s}, {e}], mask_refs={mask_refs}, mask_ids={mask_ids}, tracking={tp}")
+        print(f"[pipeline] clip_joint shape={clip_joint.shape}, range=[{clip_joint.min():.4f}, {clip_joint.max():.4f}]")
+        print(f"[pipeline] joint[0]={clip_joint[0][:6]}")
+        print(f"[pipeline] joint[-1]={clip_joint[-1][:6]}")
+        joint_diff = np.abs(clip_joint[-1] - clip_joint[0]).max()
+        print(f"[pipeline] joint max_diff(first→last)={joint_diff:.6f}" + (" ⚠️ 关节几乎没变化！" if joint_diff < 0.01 else ""))
 
         pipe_save = ensure_dir(result_dir / task_name / f"ep_{args.episode_idx:06d}" / "pipeline")
         print(f"[pipeline] save_path: {pipe_save}")
@@ -402,15 +491,13 @@ def main():
         # 检查机型是否变更
         selected_robot = annotate_result.get("robot_type", args.robot_type)
         if selected_robot != args.robot_type:
-            _log_update({"stage": "tracking", "message": f"机型变更为 {selected_robot}，重新加载…"})
+            _log_update({"stage": "tracking", "message": f"机型变更为 {selected_robot}，更新 FK 模型…"})
             cfg2 = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
             cfg2.robot_type = selected_robot
-            coarse = CoarseInit(config=cfg2)
-            coarse.to(args.device)
-            refinement = Refinement(config=cfg2)
-        else:
-            coarse = _coarse_init
-            refinement = _refinement_init
+            _coarse_init.update_robot(cfg2)
+            _refinement_init.update_robot(cfg2)
+        coarse = _coarse_init
+        refinement = _refinement_init
 
         # Stage 1: Tracking + Coarse
         _log_update({"stage": "tracking", "message": "正在追踪…"})
@@ -458,6 +545,7 @@ def main():
             clip, clip_joint, K, extrinsic, str(pipe_save),
             mask=masks, mask_id=mask_ids, max_steps=args.max_steps,
             progress_callback=_refine_cb,
+            stop_check=lambda: _pipeline_stop.is_set(),
         )
 
         # 保存 pipeline 结果（refined extrinsic + intrinsic）
@@ -473,7 +561,7 @@ def main():
         )
 
         # ── 生成标注可视化视频 ──
-        _log_update({"stage": "done", "message": "生成可视化视频…"})
+        _log_update({"stage": "visualize", "message": "生成可视化视频…"})
         import torch as _torch
         from src.caliball.pipeline.rendering_optimizer import RBSolver
         from src.caliball.utils.image import add_mask as _add_mask
@@ -507,7 +595,7 @@ def main():
             vw.write(overlay_bgr)
             last_overlay_rgb = overlay_bgr[:, :, ::-1]
             if fi % 5 == 0:
-                _log_update({"stage": "done", "message": f"可视化 {fi + 1}/{len(clip)}", "image": last_overlay_rgb})
+                _log_update({"stage": "visualize", "message": f"可视化 {fi + 1}/{len(clip)}", "image": last_overlay_rgb})
 
         vw.release()
         print(f"[pipeline] 标注视频(mp4v): {anno_path}")
@@ -531,8 +619,21 @@ def main():
         except Exception as e:
             print(f"[pipeline] ffmpeg 转码失败，使用原始视频: {e}")
 
+        # 格式化矩阵用于显示
+        def _fmt_matrix(m):
+            if hasattr(m, 'numpy'):
+                m = m.numpy()
+            return np.array2string(np.array(m), precision=6, suppress_small=True)
+
         _log_update({"stage": "done", "message": "Pipeline 完成！视频已保存",
-                      "image": last_overlay_rgb, "video_path": anno_path})
+                      "image": last_overlay_rgb, "video_path": anno_path,
+                      "intrinsic_str": _fmt_matrix(K),
+                      "extrinsic_coarse_str": _fmt_matrix(extrinsic),
+                      "extrinsic_refined_str": _fmt_matrix(refined_tsfm),
+                      "intrinsic_path": str(pipe_save / "intrinsic.npy"),
+                      "extrinsic_coarse_path": str(pipe_save / "extrinsic_coarse.npy"),
+                      "extrinsic_refined_path": str(pipe_save / "extrinsic_refined.npy"),
+                      })
 
     if args.config:
         # ── Config 模式：跳过 SAM + web，直接运行 pipeline ──
@@ -567,6 +668,7 @@ def main():
         from sam3.model_builder import build_sam3_image_model  # type: ignore[import-not-found]
         from sam3.model.sam3_image_processor import Sam3Processor  # type: ignore[import-not-found]
 
+        _loading_update("加载 SAM3…", 80)
         print("加载 SAM3 …")
         sam3_model = build_sam3_image_model(
             bpe_path=str(bpe),
@@ -586,7 +688,17 @@ def main():
             )
             return masks[0].astype(np.uint8)
 
-        _robot_types = sorted(p.stem for p in (_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml"))
+        _robot_types = []
+        for _rp in sorted((_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml")):
+            try:
+                _rc = yaml.safe_load(_rp.read_text())
+                defaults = _rc.get("defaults", [])
+                has_arm = any(isinstance(d, str) and "arm/" in d for d in defaults)
+                has_gripper = any(isinstance(d, str) and "gripper/" in d for d in defaults)
+                if not (has_arm and has_gripper):
+                    _robot_types.append(_rp.stem)
+            except Exception:
+                pass
 
         # 构造 datasets_info load_fn（用于 web 动态切换数据集）
         if datasets_info:
@@ -601,6 +713,9 @@ def main():
                         return v[:: args.strike]
                     return _load
                 ds_entry["load_fn"] = _make_load_fn(ds_entry["task_path"], ds_entry["dataset_name"])
+
+        _loading_update("加载完成，准备标注页面…", 100)
+        _loading_close()
 
         print(f"Web 交互页面: http://{args.host}:{args.tracking_port}/")
         result = run_unified_web(
@@ -617,6 +732,7 @@ def main():
             robot_types=_robot_types,
             default_robot_type=args.robot_type,
             datasets_info=datasets_info,
+            pipeline_stop_event=_pipeline_stop,
         )
 
         start_idx = result["start"]
@@ -627,6 +743,93 @@ def main():
             start_idx=start_idx, end_idx=end_idx, mask_frame_idxs=mask_frame_idxs,
             tracking_point=list(result["tracking_point"]),
         )
+
+        # 如果用户选择了"更换数据集"，回到配置页面（不重新加载模型）
+        if result.get("reconfig"):
+            print("用户选择更换数据集，回到配置页面…")
+            # 重新运行配置→数据加载→标注
+            while True:
+                web_cfg2, _lu2, _lc2 = run_dataset_config_web(
+                    dataset_configs=_dataset_configs, robot_types=_robot_types,
+                    default_robot_type=args.robot_type,
+                    default_task_path=args.task_path or "",
+                    default_dataset_name=args.dataset_name or "",
+                    default_camera_name=args.camera_name or "",
+                    default_episode_idx=args.episode_idx,
+                    default_strike=args.strike,
+                    host=args.host, port=args.tracking_port,
+                    open_browser=not args.no_browser,
+                )
+                args.task_path = web_cfg2["task_path"]
+                args.dataset_name = web_cfg2.get("dataset_name") or Path(args.task_path).parent.name
+                args.camera_name = web_cfg2["camera_name"]
+                new_robot = web_cfg2.get("robot_type", args.robot_type)
+                args.episode_idx = web_cfg2.get("episode_idx", args.episode_idx)
+                args.strike = web_cfg2.get("strike", args.strike)
+
+                _lu2("加载数据集…", 20)
+                task_path = args.task_path
+                task_name = args.task_name or Path(task_path).name
+                camera_key = args.camera_name
+                try:
+                    ds2 = LeRobotDataset(task_path, state_key=args.state_key, episodes=[args.episode_idx])
+                    ep2 = ds2[0]
+                    video = ep2["videos"][camera_key]
+                    joint_angles = ep2["states"]
+                except Exception as e:
+                    _lc2()
+                    print(f"数据集加载失败: {e}")
+                    continue
+                video = video[:: args.strike]
+                joint_angles = joint_angles[:: args.strike]
+
+                # 如果 robot type 变了，更新 FK 模型（不重新加载 DINOv2/CoTracker/SAM3）
+                if new_robot != args.robot_type:
+                    args.robot_type = new_robot
+                    _lu2("更新机型 FK 模型…", 50)
+                    model_config.robot_type = args.robot_type
+                    _coarse_init.update_robot(model_config)
+                    _refinement_init.update_robot(model_config)
+
+                # 重置内参缓存（新数据集/camera 分辨率可能不同）
+                _coarse_init.reset_intrinsic()
+
+                _lu2("准备标注页面…", 90)
+                n_frames = len(video)
+                start_idx = 0
+                end_idx = n_frames - 1
+                mask_frame_idxs = [start_idx]
+                _set_image(Image.fromarray(video[mask_frame_idxs[0]]))
+                _lc2()
+                _pipeline_stop.clear()
+
+                result2 = run_unified_web(
+                    video, _predict, _set_image,
+                    default_start=start_idx, default_end=end_idx,
+                    default_mask_refs=mask_frame_idxs,
+                    host=args.host, port=args.tracking_port,
+                    open_browser=not args.no_browser,
+                    pipeline_fn=pipeline_fn,
+                    robot_types=_robot_types,
+                    default_robot_type=args.robot_type,
+                    pipeline_stop_event=_pipeline_stop,
+                )
+                if result2.get("reconfig"):
+                    print("再次更换数据集…")
+                    continue
+
+                # 更新 result 用于后续保存
+                start_idx = result2["start"]
+                end_idx = result2["end"]
+                mask_frame_idxs = result2.get("mask_refs", [result2.get("mask_ref", start_idx)])
+                masks = result2.get("masks", [result2.get("mask")])
+                CONFIG.update(
+                    task_path=task_path, task_name=task_name, camera_name=camera_key,
+                    dataset_name=args.dataset_name, robot_type=args.robot_type,
+                    start_idx=start_idx, end_idx=end_idx, mask_frame_idxs=mask_frame_idxs,
+                    tracking_point=list(result2["tracking_point"]),
+                )
+                break
 
     if not masks or all(m is None for m in masks):
         raise SystemExit("未获得 mask")

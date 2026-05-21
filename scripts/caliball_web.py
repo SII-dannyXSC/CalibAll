@@ -1,0 +1,624 @@
+"""
+CalibAll Web — 外参标定 Web 交互入口
+=====================================
+
+用法（无需任何参数，所有配置在 Web 端完成）:
+  PYTHONPATH=. python scripts/caliball_web.py
+
+可选服务级参数:
+  PYTHONPATH=. python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
+"""
+
+from __future__ import annotations
+
+import argparse
+import gc
+import json
+import queue
+import sys
+import threading
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+from PIL import Image
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+_sam3_root = _PROJECT_ROOT / "third_party" / "sam3"
+if _sam3_root.is_dir() and str(_sam3_root) not in sys.path:
+    sys.path.insert(0, str(_sam3_root))
+
+from src.caliball.web.app import create_app, run_app
+from src.caliball.web.state import SharedState
+from src.caliball.web.services.image_utils import image_to_data_url, image_to_thumb_url
+from src.caliball.web.services.sam_service import SamService
+from src.caliball.pipeline.extrinsic_pipeline import ExtrinsicPipeline
+from src.caliball.pipeline.result_saver import save_masks, save_tracking_point_vis, save_config
+from src.caliball.utils.frame_utils import ensure_dir, save_video_frames, exported_frames_complete, overlay_mask
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="CalibAll Web: 外参检测交互标注（所有配置在 Web 端完成）")
+    p.add_argument("--host", type=str, default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--device", type=str, default="cuda")
+    p.add_argument("--max-steps", type=int, default=10000)
+    p.add_argument("--no-browser", action="store_true")
+    p.add_argument("--result-dir", type=str,
+                   default=str(_PROJECT_ROOT / "results" / "extrinsic_notebook"))
+    p.add_argument("--manual-label-dir", type=str,
+                   default=str(_PROJECT_ROOT / "manual_label"))
+    p.add_argument("--sam-bpe-path", type=str,
+                   default="third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz")
+    p.add_argument("--sam-ckpt-path", type=str, default="ckpt/sam3/sam3.pt")
+    p.add_argument("--config", type=str, default=None,
+                   help="从已保存的 config.json 启动（无 Web，直接跑 pipeline）")
+    return p.parse_args()
+
+
+def _overlay_vis(img, msk, pts, labs):
+    """Overlay mask + points on frame for SAM visualization."""
+    v = np.asarray(img).copy()
+    if v.dtype != np.uint8:
+        v = (v * 255).astype(np.uint8) if v.max() <= 1.0 else v.astype(np.uint8)
+    b = v.copy()
+    if msk is not None and msk.size:
+        mm = msk > 0
+        gg = np.zeros_like(v); gg[..., 1] = 255
+        v = (b.astype(np.float32) * 0.55 + gg.astype(np.float32) * 0.45).astype(np.uint8)
+        v = np.where(mm[..., None], v, b)
+    for (px, py), lb in zip(pts, labs):
+        c = (255, 0, 0) if lb == 1 else (0, 0, 255)
+        cv2.circle(v, (int(px), int(py)), 6, c, -1)
+        cv2.circle(v, (int(px), int(py)), 6, (255, 255, 255), 1)
+    return image_to_data_url(v)
+
+
+def _load_dataset(task_path, camera_name, state_key, episode_idx, strike):
+    """Load dataset and return video, joint_angles."""
+    from src.caliball.dataset.lerobot_dataset import LeRobotDataset
+
+    dataset = LeRobotDataset(task_path, state_key=state_key, episodes=[episode_idx])
+    episode = dataset[0]  # episodes=[episode_idx] 后索引变为 0
+    video = episode["videos"][camera_name]
+    joint_angles = episode["states"]
+
+    video = video[::strike]
+    joint_angles = joint_angles[::strike]
+
+    print(f"video shape = {video.shape}, joint shape = {joint_angles.shape}")
+    return video, joint_angles
+
+
+def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None):
+    """Load CoarseInit, Refinement, SAM3 models."""
+    from omegaconf import OmegaConf
+    from src.caliball.coarse_init import CoarseInit
+    from src.caliball.refinement import Refinement
+    from sam3.model_builder import build_sam3_image_model
+    from sam3.model.sam3_image_processor import Sam3Processor
+
+    def _up(msg, pct=0):
+        if update_fn:
+            update_fn(msg, pct)
+        print(f"[loading] {msg}")
+
+    model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
+    model_config.robot_type = robot_type
+
+    _up("加载 CoarseInit（DINOv2 + CoTracker）…", 20)
+    coarse_init = CoarseInit(config=model_config)
+    coarse_init.to(device)
+
+    _up("加载 Refinement…", 50)
+    refinement = Refinement(config=model_config)
+
+    bpe = _PROJECT_ROOT / sam_bpe_path if not Path(sam_bpe_path).is_absolute() else Path(sam_bpe_path)
+    ckpt = _PROJECT_ROOT / sam_ckpt_path if not Path(sam_ckpt_path).is_absolute() else Path(sam_ckpt_path)
+    _up("加载 SAM3…", 75)
+    sam3_model = build_sam3_image_model(
+        bpe_path=str(bpe), checkpoint_path=str(ckpt),
+        device=device, enable_inst_interactivity=True,
+    )
+    sam3_processor = Sam3Processor(sam3_model, device=device)
+
+    _up("所有模型已加载", 100)
+    return coarse_init, refinement, sam3_model, sam3_processor, model_config
+
+
+def _run_from_config(args, result_dir, manual_label_dir):
+    """Run pipeline directly from a saved config.json (no Web)."""
+    with open(args.config, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    task_path = cfg["task_path"]
+    camera_name = cfg["camera_name"]
+    state_key = cfg.get("state_key", "observation.states.joint_position")
+    robot_type = cfg.get("robot_type", "ur5e")
+    episode_idx = int(cfg.get("episode_idx", 0))
+    strike = int(cfg.get("strike", 4))
+    start_idx = int(cfg.get("start_idx", 0))
+    end_idx = int(cfg.get("end_idx", 0))
+    mask_frame_idxs = cfg.get("mask_frame_idxs", [start_idx])
+    tracking_point = tuple(cfg["tracking_point"])
+    task_name = cfg.get("task_name") or Path(task_path).name
+    dataset_name = cfg.get("dataset_name") or Path(task_path).parent.name
+
+    # Load masks
+    mask_paths = cfg.get("mask_save_paths", [])
+    if not mask_paths and cfg.get("mask_save_path"):
+        mask_paths = [cfg["mask_save_path"]]
+    if not mask_paths:
+        raise SystemExit("config 中缺少 mask_save_paths")
+    masks = [np.load(p).astype(np.uint8) for p in mask_paths]
+
+    print(f"[config] task={task_path}, camera={camera_name}, robot={robot_type}")
+    print(f"[config] tracking={tracking_point}, masks={len(masks)}")
+
+    # Load dataset
+    video, joint_angles = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
+
+    # Load models (no SAM needed)
+    from omegaconf import OmegaConf
+    from src.caliball.coarse_init import CoarseInit
+    from src.caliball.refinement import Refinement
+
+    model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
+    model_config.robot_type = robot_type
+
+    print("[loading] CoarseInit…")
+    coarse_init = CoarseInit(config=model_config)
+    coarse_init.to(args.device)
+    print("[loading] Refinement…")
+    refinement = Refinement(config=model_config)
+
+    pipeline = ExtrinsicPipeline(
+        coarse_init=coarse_init, refinement=refinement,
+        device=args.device, max_steps=args.max_steps,
+    )
+
+    # Run pipeline
+    pipe_save = ensure_dir(result_dir / task_name / f"ep_{episode_idx:06d}" / "pipeline")
+    clip = video[start_idx:end_idx + 1]
+    clip_joint = joint_angles[start_idx:end_idx + 1]
+    mask_ids = [mr - start_idx for mr in mask_frame_idxs]
+
+    output = pipeline.run(clip, clip_joint, tracking_point, masks, mask_ids, pipe_save)
+    print(f"Pipeline 完成: {output['save_dir']}")
+
+    # Save
+    dataset_name_fs = dataset_name.replace("/", ".")
+    prefix = f"{dataset_name_fs}.{task_name}.{camera_name}.{episode_idx}"
+    ep_result_dir = result_dir / task_name / f"ep_{episode_idx:06d}"
+
+    save_masks(masks, mask_frame_idxs, video, camera_name,
+               ep_result_dir, manual_label_dir, prefix, overlay_mask)
+    save_tracking_point_vis(
+        video[start_idx], tracking_point,
+        manual_label_dir / f"{prefix}.tracking_point_vis.png",
+    )
+    save_config({
+        "task_path": task_path, "task_name": task_name,
+        "dataset_name": dataset_name, "robot_type": robot_type,
+        "episode_idx": episode_idx, "camera_name": camera_name,
+        "start_idx": start_idx, "end_idx": end_idx,
+        "mask_frame_idxs": mask_frame_idxs,
+        "tracking_point": list(tracking_point),
+        "state_key": state_key,
+        **{k: str(v) for k, v in output.items() if k != "loss_dict"},
+    }, manual_label_dir / f"{prefix}.config.json")
+    print("Done.")
+
+
+def main():
+    args = parse_args()
+    result_dir = Path(args.result_dir)
+    manual_label_dir = ensure_dir(args.manual_label_dir)
+
+    # ── Config mode: no Web, directly run pipeline ──
+    if args.config:
+        _run_from_config(args, result_dir, manual_label_dir)
+        return
+
+    # ── Gather robot types (only arm types for extrinsic calibration) ──
+    # Composite configs have 'defaults' with arm+gripper; skip those
+    import yaml as _yaml
+    _robot_types = []
+    for _rp in sorted((_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml")):
+        try:
+            _rc = _yaml.safe_load(_rp.read_text())
+            # 跳过 composite（defaults 中包含 arm + gripper 的组合配置）
+            defaults = _rc.get("defaults", [])
+            has_arm = any(isinstance(d, str) and "arm/" in d for d in defaults)
+            has_gripper = any(isinstance(d, str) and "gripper/" in d for d in defaults)
+            if not (has_arm and has_gripper):
+                _robot_types.append(_rp.stem)
+        except Exception:
+            pass
+
+    # ── Setup Flask (config page first) ──
+    shared_state = SharedState()
+    cmd_q = queue.Queue()
+    pipeline_stop = threading.Event()
+
+    app = create_app(shared_state=shared_state)
+    app.config["cmd_q"] = cmd_q
+    app.config["pipeline_stop_event"] = pipeline_stop
+    app.config["config_context"] = {
+        "dataset_configs": [],
+        "robot_types": _robot_types,
+        "dual_arm_robots": ["aloha", "arx5_robotwin"],
+        "default_robot_type": "ur5e",
+        "default_task_path": "",
+        "default_dataset_name": "",
+        "default_camera_name": "",
+        "default_episode_idx": 0,
+        "default_strike": 4,
+    }
+
+    # Start Flask — config page at /
+    srv_thread = run_app(app, host=args.host, port=args.port, open_browser=not args.no_browser)
+
+    # ── Outer loop: config → load → annotate → (reconfig → repeat | finish → exit) ──
+    models_loaded = False
+    coarse_init = refinement = sam3_model = sam3_processor = model_config = None
+    pipeline = sam_svc = None
+    _sam3_state = [None]
+
+    def _update_loading(msg, pct=0):
+        shared_state.set("loading_status", {"message": msg, "progress": pct, "done": False})
+
+    while True:
+        # ── Phase 0: Wait for config ──
+        shared_state.set("config_done", False)
+        shared_state.set("loading_status", {"message": "准备中…", "progress": 0, "done": False})
+        print("等待用户在浏览器中配置数据集…")
+        while not shared_state.get("config_done"):
+            time.sleep(0.2)
+
+        web_cfg = shared_state.get("config_result")
+        task_path = web_cfg["task_path"]
+        camera_name = web_cfg["camera_name"]
+        state_key = web_cfg.get("state_key") or "observation.states.joint_position"
+        state_key_start = int(web_cfg.get("state_key_start") or 0)
+        state_key_end = web_cfg.get("state_key_end")
+        state_key_end = int(state_key_end) if state_key_end else None
+        is_dual_arm = web_cfg.get("is_dual_arm", False)
+        state_key_2 = web_cfg.get("state_key_2")
+        state_key_2_start = int(web_cfg.get("state_key_2_start") or 0)
+        state_key_2_end = web_cfg.get("state_key_2_end")
+        state_key_2_end = int(state_key_2_end) if state_key_2_end else None
+        robot_type = web_cfg.get("robot_type", "ur5e")
+        episode_idx = int(web_cfg.get("episode_idx", 0))
+        strike = int(web_cfg.get("strike", 4))
+        dataset_name = web_cfg.get("dataset_name") or Path(task_path).parent.name
+        task_name = Path(task_path).name
+        print(f"配置: task_path={task_path}, camera={camera_name}, state_key={state_key}[{state_key_start}:{state_key_end}]" +
+              (f", state_key_2={state_key_2}[{state_key_2_start}:{state_key_2_end}]" if is_dual_arm else ""))
+
+        # ── Load dataset ──
+        _update_loading("加载数据集…", 5)
+        try:
+            if is_dual_arm and state_key_2:
+                # 双臂: 分别加载左右臂关节并拼接
+                video, joint_left = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
+                _, joint_right = _load_dataset(task_path, camera_name, state_key_2, episode_idx, strike)
+                if state_key_start or state_key_end:
+                    joint_left = joint_left[:, state_key_start:state_key_end]
+                if state_key_2_start or state_key_2_end:
+                    joint_right = joint_right[:, state_key_2_start:state_key_2_end]
+                joint_angles = np.concatenate([joint_left, joint_right], axis=-1)
+                print(f"双臂 joint_angles: left={joint_left.shape[-1]}, right={joint_right.shape[-1]} → {joint_angles.shape}")
+            else:
+                video, joint_angles = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
+                # Slice joint dimensions
+                if state_key_start or state_key_end:
+                    joint_angles = joint_angles[:, state_key_start:state_key_end]
+                    print(f"joint_angles 截取 [{state_key_start}:{state_key_end}] → shape={joint_angles.shape}")
+        except Exception as e:
+            _update_loading(f"数据集加载失败: {e}", 0)
+            print(f"数据集加载失败: {e}")
+            continue
+
+        n_frames = len(video)
+        if n_frames == 0:
+            _update_loading("视频长度为 0", 0)
+            continue
+
+        # ── Load models (first time only) ──
+        if not models_loaded:
+            _update_loading("加载模型…", 10)
+            coarse_init, refinement, sam3_model, sam3_processor, model_config = _load_models(
+                args.device, robot_type, args.sam_bpe_path, args.sam_ckpt_path, _update_loading,
+            )
+            pipeline = ExtrinsicPipeline(
+                coarse_init=coarse_init, refinement=refinement,
+                device=args.device, max_steps=args.max_steps,
+            )
+
+            def _set_image(pil_img):
+                _sam3_state[0] = sam3_processor.set_image(pil_img)
+
+            def _predict(pts, lbs):
+                masks_out, _, _ = sam3_model.predict_inst(
+                    _sam3_state[0], point_coords=pts, point_labels=lbs, multimask_output=False,
+                )
+                return masks_out[0].astype(np.uint8)
+
+            sam_svc = SamService(_predict, _set_image)
+            # Initialize Recognizer with default EEF reference
+            ref_img_path = _PROJECT_ROOT / "assets" / "test_img" / "source.png"
+            if ref_img_path.exists():
+                coarse_init._init_recognizer(Image.open(ref_img_path).convert("RGB"), (376, 131))
+                print("[web] Recognizer 已用默认参考图初始化")
+            models_loaded = True
+        else:
+            if robot_type != model_config.robot_type:
+                _update_loading("更新机型 FK 模型…", 50)
+                model_config.robot_type = robot_type
+                pipeline.update_robot(model_config)
+            pipeline.reset_intrinsic()
+
+        # ── Prepare annotate page ──
+        _update_loading("生成缩略图…", 90)
+        print(f"[web] 生成 {n_frames} 帧缩略图…")
+        thumbs = [image_to_thumb_url(f) for f in video]
+
+        start_idx, end_idx = 0, n_frames - 1
+        mask_frame_idxs = [start_idx]
+        first_mask_ref = mask_frame_idxs[0]
+        initial_overlay = image_to_data_url(video[first_mask_ref])
+        tracking_url = image_to_data_url(video[start_idx])
+        _set_image(Image.fromarray(video[first_mask_ref]))
+        sam_svc.clear()
+
+        robot_html = ""
+        if _robot_types:
+            _opts = "".join(
+                f"<option value='{rt}'{' selected' if rt == robot_type else ''}>{rt}</option>"
+                for rt in _robot_types
+            )
+            robot_html = (
+                "<div style='margin-bottom:12px'><label style='font-size:14px'>机型: "
+                f"<select id=rt style='padding:4px 8px;font-size:14px'>{_opts}</select>"
+                "</label></div>"
+            )
+
+        shared_state.update_overlay(initial_overlay, "左键=前景 右键=背景", 0)
+        shared_state.clear_pipeline()
+        app.config["frames"] = video
+        app.config["annotate_context"] = {
+            "thumbs": thumbs, "default_start": start_idx, "default_end": end_idx,
+            "mask_refs": mask_frame_idxs,
+            "tracking_x": "null", "tracking_y": "null",
+            "has_default_tracking": False, "has_default_masks": False,
+            "has_pipeline": True,
+            "initial_overlay": initial_overlay, "tracking_url": tracking_url,
+            "robot_html": robot_html, "dataset_html": "",
+            "is_dual_arm": is_dual_arm,
+        }
+        shared_state.set("loading_status", {"message": "加载完成", "progress": 100, "done": True})
+        print("[web] 标注页面已就绪")
+
+        # ── Annotation + Pipeline loop ──
+        session_done = False
+        result_val = None
+        pipeline_output = None
+        reconfig_requested = False
+
+        while not session_done:
+            # Phase 1: Annotation
+            while True:
+                try:
+                    path, raw = cmd_q.get(timeout=0.15)
+                except queue.Empty:
+                    continue
+                d = json.loads(raw.decode("utf-8")) if raw and raw != b"{}" else {}
+
+                if path == "/api/sam/set_image":
+                    fi = int(d["idx"])
+                    sam_svc.set_image(fi, video[fi])
+                    fs = sam_svc.get_frame_state(fi)
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"已切换到帧 {fi}", 0)
+                elif path == "/api/sam/switch_frame":
+                    fi = int(d["fi"])
+                    sam_svc.switch_frame(fi, video[fi])
+                    fs = sam_svc.get_frame_state(fi)
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: {len(fs['points'])} 点", len(fs["points"]))
+                elif path == "/api/sam/click":
+                    fi = int(d.get("fi", sam_svc.active_frame))
+                    sam_svc.add_point(fi, float(d["x"]), float(d["y"]), int(d.get("label", 1)), video[fi])
+                    fs = sam_svc.get_frame_state(fi)
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: {len(fs['points'])} 点", len(fs["points"]))
+                elif path == "/api/sam/undo":
+                    fi = int(d.get("fi", sam_svc.active_frame))
+                    sam_svc.undo(fi)
+                    fs = sam_svc.get_frame_state(fi)
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: 撤销后 {len(fs['points'])} 点", len(fs["points"]))
+                elif path == "/api/auto_detect":
+                    fi = int(d.get("fi", 0))
+                    resp_q = app.config.get("auto_detect_resp_q")
+                    try:
+                        img_pil = Image.fromarray(video[fi])
+                        state = sam3_processor.set_image(img_pil)
+                        out = sam3_processor.set_text_prompt(state=state, prompt="robotic arm")
+                        auto_masks = out["masks"]
+                        if len(auto_masks) > 0:
+                            mask = auto_masks[0]
+                            if hasattr(mask, 'cpu'):
+                                mask = mask.cpu().numpy()
+                            mask = np.asarray(mask, dtype=np.uint8)
+                            if mask.ndim == 3:
+                                mask = mask.squeeze()
+                            fs = sam_svc.get_frame_state(fi)
+                            fs["points"] = []
+                            fs["labels"] = []
+                            fs["mask"] = mask
+                            overlay_url = _overlay_vis(video[fi], mask, [], [])
+                            shared_state.update_overlay(overlay_url, f"SAM3 自动检测完成 帧{fi}", len(fs["points"]))
+                            if resp_q:
+                                resp_q.put({"ok": True, "overlay": overlay_url})
+                        else:
+                            if resp_q:
+                                resp_q.put({"ok": False, "error": "未检测到机械臂"})
+                    except Exception as e:
+                        if resp_q:
+                            resp_q.put({"ok": False, "error": str(e)})
+                elif path == "/api/auto_tracking":
+                    resp_q = app.config.get("auto_tracking_resp_q")
+                    try:
+                        target_fi = int(d.get("target_fi", 0))
+                        target_pil = Image.fromarray(video[target_fi])
+                        tx, ty = coarse_init.recognizer.get_uv(target_img_pil=target_pil)
+                        if resp_q:
+                            resp_q.put({"ok": True, "tracking_x": float(tx), "tracking_y": float(ty)})
+                    except Exception as e:
+                        if resp_q:
+                            resp_q.put({"ok": False, "error": str(e)})
+                elif path == "/api/done":
+                    mask_refs = [int(x) for x in d.get("maskRefs", d.get("maskRef", []))]
+                    if isinstance(mask_refs, int):
+                        mask_refs = [mask_refs]
+                    result_val = {
+                        "start": int(d["start"]), "end": int(d["end"]),
+                        "mask_refs": mask_refs,
+                        "tracking_point": (float(d["trackingX"]), float(d["trackingY"])),
+                        "masks": sam_svc.get_masks_for_refs(mask_refs),
+                        "robot_type": d.get("robotType", robot_type),
+                    }
+                    break
+                elif path == "/api/finish":
+                    session_done = True; break
+                elif path == "/api/reconfig":
+                    session_done = True; reconfig_requested = True; break
+
+            if session_done:
+                break
+
+            # Phase 2: Pipeline
+            if result_val is not None:
+                gc.collect()
+                s, e = result_val["start"], result_val["end"]
+                mask_refs = result_val["mask_refs"]
+                # 扩展 clip 范围以覆盖 mask 参考帧（可能在 start-end 之外）
+                clip_start = min(s, *mask_refs)
+                clip_end = max(e, *mask_refs)
+                clip, clip_joint = video[clip_start:clip_end+1], joint_angles[clip_start:clip_end+1]
+                tp, masks = result_val["tracking_point"], result_val["masks"]
+                mask_ids = [mr - clip_start for mr in mask_refs]
+
+                sel_robot = result_val.get("robot_type", robot_type)
+                if sel_robot != robot_type:
+                    robot_type = sel_robot
+                    model_config.robot_type = sel_robot
+                    pipeline.update_robot(model_config)
+
+                pipe_save = ensure_dir(result_dir / task_name / f"ep_{episode_idx:06d}" / "pipeline")
+
+                def _progress(stage, message, **kw):
+                    update = {"stage": stage, "message": message}
+                    if "image" in kw and isinstance(kw["image"], np.ndarray):
+                        update["image"] = image_to_data_url(kw["image"])
+                    if "overlays" in kw and isinstance(kw["overlays"], list):
+                        update["overlays"] = [image_to_data_url(ov) if isinstance(ov, np.ndarray) else ov for ov in kw["overlays"]]
+                    for k in ("step", "max_steps", "video_path", "tracking_video_path", "mask_ids", "warning"):
+                        if k in kw: update[k] = kw[k]
+                    shared_state.update_pipeline(**update)
+                    print(f"[pipeline] [{stage}] {message}")
+
+                try:
+                    arm_index = int(result_val.get("armIndex", result_val.get("arm_index", 0)))
+                    output = pipeline.run(clip, clip_joint, tp, masks, mask_ids, pipe_save,
+                                          progress_fn=_progress, stop_check=lambda: pipeline_stop.is_set(),
+                                          arm_index=arm_index, full_video=video, full_joint_angles=joint_angles,
+                                          tracking_img_idx=s - clip_start)
+                    pipeline_output = output
+                    def _fmt(m): return np.array2string(np.array(m), precision=6, suppress_small=True)
+                    shared_state.update_pipeline(
+                        stage="done", message="Pipeline 完成！",
+                        video_path=output.get("anno_video_path"),
+                        tracking_video_path=output.get("tracking_video_path"),
+                        intrinsic_path=str(pipe_save / "intrinsic.npy"),
+                        extrinsic_coarse_path=str(pipe_save / "extrinsic_coarse.npy"),
+                        extrinsic_refined_path=str(pipe_save / "extrinsic_refined.npy"),
+                        intrinsic_str=_fmt(output["intrinsic"]),
+                        extrinsic_coarse_str=_fmt(output["extrinsic_coarse"]),
+                        extrinsic_refined_str=_fmt(output["extrinsic_refined"]),
+                    )
+                except Exception as exc:
+                    import traceback; traceback.print_exc()
+                    shared_state.update_pipeline(stage="done", message=f"Pipeline 出错: {exc}")
+
+            # Phase 3: Wait for restart/finish/reconfig
+            while True:
+                try:
+                    path, raw = cmd_q.get(timeout=0.15)
+                except queue.Empty:
+                    continue
+                if path == "/api/finish":
+                    session_done = True; break
+                elif path == "/api/reconfig":
+                    session_done = True; reconfig_requested = True; break
+                elif path == "/api/restart":
+                    break
+
+            if not session_done:
+                sam_svc.clear()
+                _set_image(Image.fromarray(video[first_mask_ref]))
+                shared_state.reset(initial_overlay)
+                shared_state.clear_pipeline()
+                pipeline_stop.clear()
+                print("[web] 重新标注 — 页面已重置")
+
+        # ── Save results ──
+        if result_val is not None and pipeline_output is not None:
+            ep_result_dir = result_dir / task_name / f"ep_{episode_idx:06d}"
+            dataset_name_fs = dataset_name.replace("/", ".")
+            prefix = f"{dataset_name_fs}.{task_name}.{camera_name}.{episode_idx}"
+
+            mask_save_paths = save_masks(result_val["masks"], result_val["mask_refs"], video, camera_name, ep_result_dir, manual_label_dir, prefix, overlay_mask)
+            save_tracking_point_vis(video[result_val["start"]], result_val["tracking_point"], manual_label_dir / f"{prefix}.tracking_point_vis.png")
+            save_config({
+                "task_path": task_path, "task_name": task_name,
+                "dataset_name": dataset_name, "robot_type": robot_type,
+                "episode_idx": episode_idx, "camera_name": camera_name,
+                "strike": strike, "state_key": state_key,
+                "start_idx": result_val["start"], "end_idx": result_val["end"],
+                "mask_frame_idxs": result_val["mask_refs"],
+                "tracking_point": list(result_val["tracking_point"]),
+                "mask_save_paths": mask_save_paths,
+            }, manual_label_dir / f"{prefix}.config.json")
+            print(f"Config 已保存: manual_label/{prefix}.config.json")
+
+            import yaml
+            K = np.array(pipeline_output["intrinsic"])
+            T = np.array(pipeline_output["extrinsic_refined"])
+            calib_data = {"dataset": dataset_name, "cameras": {camera_name: {"intrinsic": K.tolist(), "extrinsic": T.tolist()}}}
+            calib_filename = dataset_name.replace("/", "_").replace(".", "_") + ".yaml"
+            calib_path = ep_result_dir / "pipeline" / calib_filename
+            calib_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(calib_path, "w") as f:
+                yaml.dump(calib_data, f, default_flow_style=None, allow_unicode=True)
+            print(f"Calibration yaml 已保存: {calib_path}")
+            # Update shared state so frontend can download
+            shared_state.update_pipeline(calibration_path=str(calib_path))
+
+        # ── Reconfig or exit ──
+        if reconfig_requested:
+            print("[web] 返回配置页面…")
+            pipeline_stop.clear()
+            while not cmd_q.empty():
+                try: cmd_q.get_nowait()
+                except queue.Empty: break
+            continue
+        else:
+            break
+
+    print("Done.")
+
+
+if __name__ == "__main__":
+    main()

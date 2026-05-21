@@ -67,6 +67,8 @@ class ArmGripperCompositeTF(BaseTF):
         q = np.asarray(q, dtype=np.float64)
         q_arm = q[: self.arm_joint_num]
         q_grip = q[self.arm_joint_num : self.arm_joint_num + 1]  # (1,)
+        if q_grip.size == 0:
+            q_grip = np.array([0.0])  # default gripper open
         arm_tfs = self.arm.fkine_all(q_arm)  # (1, n_arm_links, 4, 4)
         T_mount = self._mount_with_gripper_bias(
             self._mount_T_for_gripper_meshes(arm_tfs, q_arm)

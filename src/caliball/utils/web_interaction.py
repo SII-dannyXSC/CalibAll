@@ -435,6 +435,345 @@ def pick_frames_web(
     return result["val"]
 
 
+def run_dataset_config_web(
+    dataset_configs: Optional[list] = None,
+    robot_types: Optional[list] = None,
+    default_robot_type: str = "ur5e",
+    default_task_path: str = "",
+    default_dataset_name: str = "",
+    default_camera_name: str = "",
+    default_episode_idx: int = 0,
+    default_strike: int = 4,
+    default_start_idx: int = 0,
+    default_end_idx: int = 39,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+    open_browser: bool = True,
+) -> dict:
+    """Web 配置页面：下拉选择数据集配置 + 输入 task-path + 自动扫描 cameras。
+
+    dataset_configs: [{name, robot_type, state_key, ...}, ...]
+    """
+    import os as _os
+
+    result: dict = {"val": None}
+    done = threading.Event()
+    loading_done = threading.Event()
+    loading_status: dict = {"message": "准备中…", "progress": 0, "done": False}
+    scan_req_q: queue.Queue = queue.Queue()   # HTTP → main: raw bytes
+    scan_resp_q: queue.Queue = queue.Queue()  # main → HTTP: dict
+
+    # dataset 配置下拉选项
+    ds_configs_json = json.dumps(dataset_configs or [])
+
+    # robot-type 下拉选项
+    rt_opts = ""
+    if robot_types:
+        rt_opts = "".join(
+            "<option value='" + rt + "'" + (" selected" if rt == default_robot_type else "") + ">" + rt + "</option>"
+            for rt in robot_types
+        )
+
+    html = (
+        "<!DOCTYPE html><html lang=zh-CN><head><meta charset=UTF-8>"
+        "<title>数据集配置</title><style>"
+        "*{box-sizing:border-box}"
+        "body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}"
+        ".f{margin-bottom:12px}.f label{display:block;font-size:14px;font-weight:600;margin-bottom:4px}"
+        ".f input,.f select{width:100%;padding:8px 10px;font-size:14px;border:1px solid #ccc;border-radius:4px}"
+        ".row{display:flex;gap:12px}.row .f{flex:1}"
+        ".scan-row{display:flex;gap:8px;align-items:flex-end}"
+        ".scan-row .f{flex:1;margin-bottom:0}"
+        ".scan-row button{padding:8px 16px;font-size:14px;cursor:pointer;white-space:nowrap;"
+        "border:1px solid #06f;background:#06f;color:#fff;border-radius:4px}"
+        "#go{display:block;margin:20px auto;padding:12px 40px;font-size:16px;"
+        "cursor:pointer;background:#334;color:#fff;border:none;border-radius:6px}"
+        "#msg{text-align:center;margin-top:8px;font-size:14px}"
+        ".ok{color:#090}.err{color:#c00}"
+        "</style></head><body>"
+        "<h2>数据集配置</h2>"
+        # ── 数据集配置选择 ──
+        "<div class=f><label>数据集配置</label>"
+        "<select id=dc onchange='onDcChange()'>"
+        "<option value=''>-- 自定义 --</option>"
+        "</select></div>"
+        # ── task-path + 扫描 ──
+        "<div class=scan-row style='margin-bottom:12px'>"
+        "<div class=f><label>数据集路径 (task-path)</label>"
+        "<input id=tp placeholder='/path/to/lerobot_dataset/task_name' value='" + default_task_path.replace("'", "&#39;") + "'/></div>"
+        "<button onclick='scanPath()' style='margin-bottom:0'>扫描</button></div>"
+        "<p id=scan-msg style='font-size:13px;margin:0 0 8px 0'></p>"
+        # ── dataset-name / camera ──
+        "<div class=row>"
+        "<div class=f><label>dataset-name（自动推断，可修改）</label>"
+        "<input id=dn placeholder='如 robomind.franka_3rgb' value='" + default_dataset_name + "'/></div>"
+        "<div class=f><label>camera-name</label>"
+        "<select id=cn><option value=''>请先扫描路径</option></select></div></div>"
+        # ── state_key ──
+        "<div class=f><label>state_key (关节数据列)</label>"
+        "<select id=stk><option value=''>请先扫描路径</option></select></div>"
+        # ── robot-type / episode ──
+        "<div class=row>"
+        "<div class=f><label>机型 (robot-type)</label>"
+        "<select id=rt>" + rt_opts + "</select></div>"
+        "<div class=f><label>episode-idx</label>"
+        "<input id=ei type=number value='" + str(default_episode_idx) + "'/></div></div>"
+        # ── strike / start / end ──
+        "<div class=row>"
+        "<div class=f><label>strike (抽帧间隔)</label>"
+        "<input id=sk type=number value='" + str(default_strike) + "'/></div></div>"
+        "<button id=go onclick=go()>加载数据集</button>"
+        "<p id=msg></p>"
+        "<script>"
+        "var DC=" + ds_configs_json + ";"
+        # 填充数据集配置下拉
+        "var dcSel=document.getElementById('dc');"
+        "DC.forEach(function(c,i){"
+        "var o=document.createElement('option');o.value=i;o.textContent=c.name;dcSel.appendChild(o);});"
+        # 选择配置后自动填充 robot-type
+        "function onDcChange(){"
+        "var i=dcSel.value;if(i==='')return;"
+        "var c=DC[parseInt(i)];"
+        "if(c.robot_type){document.getElementById('rt').value=c.robot_type;}"
+        "if(c.dataset_name){document.getElementById('dn').value=c.dataset_name;}}"
+        # 扫描 task-path 获取 cameras
+        "function scanPath(){"
+        "var tp=document.getElementById('tp').value.trim();"
+        "if(!tp){document.getElementById('scan-msg').textContent='请先输入路径';return;}"
+        "document.getElementById('scan-msg').textContent='扫描中…';document.getElementById('scan-msg').className='';"
+        "fetch('/api/scan',{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({task_path:tp})})"
+        ".then(function(r){return r.json()}).then(function(d){"
+        "if(d.cameras&&d.cameras.length>0){"
+        "var cn=document.getElementById('cn');cn.innerHTML='';"
+        "d.cameras.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;cn.appendChild(o);});"
+        "if(d.dataset_name){document.getElementById('dn').value=d.dataset_name;}"
+        "if(d.state_keys&&d.state_keys.length>0){"
+        "var stk=document.getElementById('stk');stk.innerHTML='';"
+        "d.state_keys.forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=k;stk.appendChild(o);});}"
+        "document.getElementById('scan-msg').textContent='找到 '+d.cameras.length+' 个 camera';document.getElementById('scan-msg').className='ok';}"
+        "else{document.getElementById('scan-msg').textContent=d.error||'未找到 camera';document.getElementById('scan-msg').className='err';}});}"
+        # 提交
+        "function go(){"
+        "var tp=document.getElementById('tp').value.trim();"
+        "var dn=document.getElementById('dn').value.trim();"
+        "var cn=document.getElementById('cn').value;"
+        "if(!tp){document.getElementById('msg').textContent='请填写数据集路径';document.getElementById('msg').className='err';return;}"
+        "if(!cn){document.getElementById('msg').textContent='请先扫描路径并选择 camera';document.getElementById('msg').className='err';return;}"
+        "if(!dn)dn=tp.split('/').filter(Boolean).slice(-2,-1)[0]||'unknown';"
+        "document.getElementById('go').disabled=true;document.getElementById('go').textContent='加载中…';"
+        "fetch('/done',{method:'POST',headers:{'Content-Type':'application/json'},"
+        "body:JSON.stringify({"
+        "task_path:tp,dataset_name:dn,camera_name:cn,"
+        "robot_type:document.getElementById('rt').value,"
+        "state_key:document.getElementById('stk').value,"
+        "episode_idx:parseInt(document.getElementById('ei').value)||0,"
+        "strike:parseInt(document.getElementById('sk').value)||4"
+        "})}).then(function(r){return r.json()}).then(function(d){"
+        "if(d.ok){document.body.innerHTML="
+        "'<div style=\"max-width:600px;margin:3rem auto;text-align:center;font-family:system-ui\">"
+        "<h2>模型加载中</h2>"
+        "<p id=\"ls\" style=\"font-size:16px;color:#334\">准备中…</p>"
+        "<div style=\"background:#eee;border-radius:8px;height:8px;margin:16px 0\">"
+        "<div id=\"lb\" style=\"background:#06f;height:100%;border-radius:8px;width:0%;transition:width 0.3s\"></div></div>"
+        "<p id=\"ld\" style=\"font-size:13px;color:#999\"></p></div>';"
+        "var lt=setInterval(function(){"
+        "fetch('/api/loading_status').then(function(r){return r.json()}).then(function(s){"
+        "document.getElementById('ls').textContent=s.message||'加载中…';"
+        "if(s.progress!==undefined)document.getElementById('lb').style.width=s.progress+'%';"
+        "if(s.detail)document.getElementById('ld').textContent=s.detail;"
+        "if(s.done){clearInterval(lt);"
+        "document.getElementById('ls').textContent='加载完成！正在跳转…';"
+        "document.getElementById('lb').style.width='100%';}});},500);}"
+        "else{document.getElementById('msg').textContent=d.error||'加载失败';document.getElementById('msg').className='err';"
+        "document.getElementById('go').disabled=false;document.getElementById('go').textContent='加载数据集';}});}"
+        "</script></body></html>"
+    )
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *a):
+            pass
+
+        def do_GET(self):
+            if self.path in ("/", "/?"):
+                b = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(b)))
+                self.end_headers()
+                self.wfile.write(b)
+            elif self.path == "/api/loading_status":
+                out = json.dumps(loading_status).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
+            else:
+                self.send_error(404)
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(n) if n else b"{}"
+            p = self.path.split("?")[0]
+            if p == "/api/scan":
+                scan_req_q.put(raw)
+                try:
+                    resp_data = scan_resp_q.get(timeout=30)
+                except queue.Empty:
+                    resp_data = {"error": "超时"}
+                resp = json.dumps(resp_data, ensure_ascii=False).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+            elif p == "/done":
+                try:
+                    d = json.loads(raw.decode("utf-8"))
+                    # 验证路径是否为合法 LeRobot 数据集
+                    from pathlib import Path as _P
+                    tp = _P(d.get("task_path", ""))
+                    if not tp.is_dir():
+                        resp = json.dumps({"ok": False, "error": f"路径不存在: {tp}"}).encode("utf-8")
+                    elif not (tp / "data").is_dir() and not (tp / "meta").is_dir() and not (tp / "videos").is_dir():
+                        resp = json.dumps({"ok": False, "error": "不是合法的 LeRobot 数据集（缺少 data/、meta/ 或 videos/ 目录）"}).encode("utf-8")
+                    else:
+                        result["val"] = d
+                        resp = json.dumps({"ok": True}).encode("utf-8")
+                except Exception as e:
+                    resp = json.dumps({"ok": False, "error": str(e)}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp)))
+                self.end_headers()
+                self.wfile.write(resp)
+                if result["val"]:
+                    done.set()
+            else:
+                self.send_error(404)
+
+    def _scan_cameras(task_path: str) -> dict:
+        """扫描 task_path 的可用 cameras，并推断 dataset_name。"""
+        from pathlib import Path
+        tp = Path(task_path)
+        if not tp.is_dir():
+            return {"error": f"路径不存在: {task_path}"}
+        cameras = []
+        # 方法1：从 meta/info.json 的 features 获取（LeRobot 2.1 格式）
+        info_json = tp / "meta" / "info.json"
+        if info_json.is_file():
+            try:
+                info = json.loads(info_json.read_text())
+                # 先尝试 camera_keys / video_keys 字段
+                cameras = info.get("camera_keys", info.get("video_keys", []))
+                # 如果没有，从 features 中找 dtype=video 的 key
+                if not cameras and "features" in info:
+                    cameras = [k for k, v in info["features"].items()
+                               if isinstance(v, dict) and v.get("dtype") == "video"]
+            except Exception:
+                pass
+        # 方法2：从 videos/ 目录推断（兼容多种目录结构）
+        if not cameras:
+            videos_dir = tp / "videos"
+            if videos_dir.is_dir():
+                seen = set()
+                # 直接 mp4: videos/*.mp4
+                for vf in sorted(videos_dir.iterdir()):
+                    if vf.suffix == ".mp4":
+                        cam = vf.stem.rsplit("_episode_", 1)[0] if "_episode_" in vf.stem else vf.stem
+                        if cam not in seen:
+                            cameras.append(cam)
+                            seen.add(cam)
+                # chunk 结构: videos/chunk-*/camera_name/*.mp4
+                if not cameras:
+                    for chunk_dir in sorted(videos_dir.glob("chunk-*")):
+                        if chunk_dir.is_dir():
+                            for cam_dir in sorted(chunk_dir.iterdir()):
+                                if cam_dir.is_dir() and cam_dir.name not in seen:
+                                    cameras.append(cam_dir.name)
+                                    seen.add(cam_dir.name)
+        # 推断 dataset_name（父目录名）
+        dataset_name = tp.parent.name
+        result = {"dataset_name": dataset_name}
+        if cameras:
+            result["cameras"] = cameras
+        else:
+            result["cameras"] = []
+            result["error"] = "未找到 camera"
+
+        # 从第一个 parquet 文件读取可用列名，作为 state_key 候选
+        # 只保留数值数组类型的列（能 np.stack 为 float 的）
+        state_keys = []
+        data_dir = tp / "data"
+        if data_dir.is_dir():
+            parquet_files = sorted(data_dir.rglob("*.parquet"))
+            if parquet_files:
+                try:
+                    import pandas as _pd
+                    import numpy as _np
+                    _df = _pd.read_parquet(parquet_files[0])
+                    _skip = {"episode_index", "frame_index", "index", "timestamp", "task_index"}
+                    _video_cols = set(cameras) if cameras else set()
+                    for c in _df.columns:
+                        if c in _skip or c in _video_cols:
+                            continue
+                        try:
+                            arr = _np.stack(_df[c].values[:3])
+                            if _np.issubdtype(arr.dtype, _np.number) and arr.ndim >= 1:
+                                state_keys.append(c)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+        result["state_keys"] = state_keys
+
+        return result
+
+    srv = HTTPServer((host, port), H)
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    url = f"http://{host}:{port}/"
+    print(f"[web] 数据集配置页面: {url}")
+    if open_browser:
+        webbrowser.open(url)
+
+    # 主线程处理 scan 请求（避免多线程文件 IO 问题）
+    while not done.is_set():
+        try:
+            raw = scan_req_q.get(timeout=0.2)
+            d = json.loads(raw.decode("utf-8"))
+            scan_result = _scan_cameras(d.get("task_path", ""))
+            scan_resp_q.put(scan_result)
+        except queue.Empty:
+            continue
+        except Exception as e:
+            scan_resp_q.put({"error": str(e)})
+
+    if result["val"] is None:
+        srv.shutdown()
+        th.join(timeout=2)
+        raise RuntimeError("未收到配置（超时或未确认）")
+
+    # 返回配置 + 加载进度更新函数 + 关闭函数
+    def _update_loading(message: str, progress: int = 0, detail: str = ""):
+        loading_status["message"] = message
+        loading_status["progress"] = progress
+        loading_status["detail"] = detail
+        print(f"[loading] {message}" + (f" ({detail})" if detail else ""))
+
+    def _close_config_server():
+        loading_status["done"] = True
+        loading_status["message"] = "加载完成"
+        loading_status["progress"] = 100
+        import time; time.sleep(1)
+        srv.shutdown()
+        srv.server_close()
+        th.join(timeout=2)
+
+    return result["val"], _update_loading, _close_config_server
+
+
 def run_unified_web(
     frames: np.ndarray,
     predict_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
@@ -454,6 +793,7 @@ def run_unified_web(
     default_robot_type: str = "",
     datasets_info: Optional[list] = None,
     default_dataset_idx: int = 0,
+    pipeline_stop_event=None,
 ) -> dict:
     """
     统一 Web 交互页面：选帧 + 选追踪点 + 选 mask，三步同页。
@@ -674,6 +1014,8 @@ def run_unified_web(
         "<div class=ps id=ps-coarse>&#9203; Coarse Init (PnP)</div>"
         "<div class=ps id=ps-refine>&#9203; Refinement <span id=p-step></span></div>"
         "</div>"
+        "<button id=stop-btn onclick='stopRefine()' style='display:none;margin:8px 0;padding:6px 16px;"
+        "font-size:14px;cursor:pointer;background:#c00;color:#fff;border:none;border-radius:4px'>停止优化</button>"
         "<p id=p-msg style='margin:8px 0;font-size:14px'>等待标注完成...</p>"
         "<div class=mtabs id=p-mtabs style='display:none'></div>"
         "<img id=p-img style='max-width:100%;max-height:50vh;display:none;margin-top:8px'/>"
@@ -681,6 +1023,8 @@ def run_unified_web(
         "<button id=fin-btn onclick=fin()>退出</button>"
         "<button id=restart-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;"
         "cursor:pointer;background:#06f;color:#fff;border:none;border-radius:6px' onclick=restart()>重新标注</button>"
+        "<button id=reconfig-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;"
+        "cursor:pointer;background:#f80;color:#fff;border:none;border-radius:6px' onclick=reconfig()>更换数据集</button>"
         # ── JS ──
         "<script>"
         "var T=" + thumbs_json + ";"
@@ -709,14 +1053,9 @@ def run_unified_web(
         "g.appendChild(d);}}"
         # Pick frame
         "function pickF(i){"
-        "if(S.fm==='start'){S.s=i;if(S.e<i)S.e=i;"
-        "S.ms=S.ms.filter(function(m){return m>=S.s&&m<=S.e;});"
-        "if(S.ms.length===0)S.ms=[S.s];}"
-        "else if(S.fm==='end'){S.e=i;if(S.s>i)S.s=i;"
-        "S.ms=S.ms.filter(function(m){return m>=S.s&&m<=S.e;});"
-        "if(S.ms.length===0)S.ms=[S.s];}"
-        "else{"  # mask mode: toggle
-        "if(i<S.s||i>S.e){alert('mask参考帧须在范围内');return;}"
+        "if(S.fm==='start'){S.s=i;if(S.e<i)S.e=i;}"
+        "else if(S.fm==='end'){S.e=i;if(S.s>i)S.s=i;}"
+        "else{"  # mask mode: toggle (不限制在 start-end 范围内)
         "var idx=S.ms.indexOf(i);"
         "if(idx>=0){if(S.ms.length>1)S.ms.splice(idx,1);}"
         "else{S.ms.push(i);S.ms.sort(function(a,b){return a-b;});}"
@@ -861,10 +1200,11 @@ def run_unified_web(
         "var ss=['tracking','coarse','refine'],ci=ss.indexOf(d.stage);"
         "ss.forEach(function(s,i){"
         "var el=document.getElementById('ps-'+s);"
-        "if(d.stage==='done'||i<ci){el.className='ps done';}"
+        "if(d.stage==='done'||d.stage==='visualize'||i<ci){el.className='ps done';}"
         "else if(i===ci){el.className='ps active';}"
         "else{el.className='ps';}});"
         "if(d.step!==undefined)document.getElementById('p-step').textContent='('+d.step+'/'+(d.max_steps||'?')+')';"
+        "document.getElementById('stop-btn').style.display=(d.stage==='refine')?'inline-block':'none';"
         "if(d.overlays&&d.overlays.length>0){"
         "pOverlays=d.overlays;"
         "if(d.mask_ids)pMaskIds=d.mask_ids;"
@@ -874,16 +1214,50 @@ def run_unified_web(
         "if(d.stage==='done'){clearInterval(pipeTimer);"
         "document.getElementById('fin-btn').style.display='block';"
         "document.getElementById('restart-btn').style.display='block';"
-        "if(d.video_path){var v=document.createElement('video');"
-        "v.src='/api/video';v.controls=true;v.autoplay=true;v.loop=true;"
+        "document.getElementById('reconfig-btn').style.display='block';"
+        # 显示内参/外参矩阵
+        "var mc=document.getElementById('p-img').parentNode;"
+        "if(d.intrinsic_str||d.extrinsic_refined_str){"
+        "var md=document.createElement('div');md.style.marginTop='12px';"
+        "md.innerHTML='<h4 style=\"margin:8px 0 4px\">Intrinsic (K)</h4>'"
+        "+'<pre style=\"background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto\">'+(d.intrinsic_str||'N/A')+'</pre>'"
+        "+'<h4 style=\"margin:8px 0 4px\">Extrinsic (Refined)</h4>'"
+        "+'<pre style=\"background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto\">'+(d.extrinsic_refined_str||'N/A')+'</pre>'"
+        "+'<h4 style=\"margin:8px 0 4px\">Extrinsic (Coarse)</h4>'"
+        "+'<pre style=\"background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto\">'+(d.extrinsic_coarse_str||'N/A')+'</pre>'"
+        "+'<div style=\"margin-top:8px;font-size:14px\">'"
+        "+'<a href=\"/api/download/intrinsic\" download style=\"margin-right:12px\">下载 intrinsic.npy</a>'"
+        "+'<a href=\"/api/download/extrinsic_refined\" download style=\"margin-right:12px\">下载 extrinsic_refined.npy</a>'"
+        "+'<a href=\"/api/download/extrinsic_coarse\" download>下载 extrinsic_coarse.npy</a>'"
+        "+'</div>';"
+        "mc.appendChild(md);}"
+        # 视频
+        "if(d.video_path){"
+        "var v=document.createElement('video');"
+        "v.src='/api/video';v.controls=true;v.autoplay=true;v.loop=true;v.muted=true;"
         "v.style.maxWidth='100%';v.style.maxHeight='50vh';v.style.marginTop='8px';"
-        "var c=document.getElementById('p-img').parentNode;c.appendChild(v);}}"
-        "});}"
+        "v.setAttribute('playsinline','');"
+        "var c=document.getElementById('p-img').parentNode;c.appendChild(v);"
+        "var dl=document.createElement('a');dl.href='/api/video';dl.download='anno_video.mp4';"
+        "dl.textContent='下载视频';dl.style.display='block';dl.style.marginTop='8px';dl.style.fontSize='14px';"
+        "c.appendChild(dl);}}"
+        "}).catch(function(e){console.error('pollPipe error:',e);});}"
         "function fin(){"
         "fetch('/api/finish',{method:'POST'}).then(function(){"
         "document.body.innerHTML='<p style=\"text-align:center;margin-top:3rem;font-size:18px\">已完成</p>';});}"
         "function restart(){"
-        "fetch('/api/restart',{method:'POST'}).then(function(){location.reload();});}"
+        "if(pipeTimer)clearInterval(pipeTimer);"
+        "if(typeof samTimer!=='undefined')clearInterval(samTimer);"
+        "fetch('/api/restart',{method:'POST'})"
+        ".then(function(){setTimeout(function(){location.reload();},300);})"
+        ".catch(function(){location.reload();});}"
+        "function reconfig(){"
+        "fetch('/api/reconfig',{method:'POST'}).then(function(){"
+        "document.body.innerHTML='<p style=\"text-align:center;margin-top:3rem;font-size:18px\">正在返回配置页面…</p>';});}"
+        "function stopRefine(){"
+        "fetch('/api/pipeline/stop',{method:'POST'}).then(function(){"
+        "document.getElementById('stop-btn').disabled=true;"
+        "document.getElementById('stop-btn').textContent='正在停止…';});}"
         "</script></body></html>"
     )
 
@@ -930,7 +1304,12 @@ def run_unified_web(
             elif self.path == "/api/pipeline/state":
                 with lock:
                     ps = shared.get("pipeline", {})
-                    out = json.dumps(ps, ensure_ascii=False).encode("utf-8")
+                    # done 阶段不传 overlays/image（太大会阻塞 fetch）
+                    if ps.get("stage") == "done":
+                        ps_out = {k: v for k, v in ps.items() if k not in ("overlays", "image")}
+                    else:
+                        ps_out = ps
+                    out = json.dumps(ps_out, ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(out)))
@@ -942,12 +1321,32 @@ def run_unified_web(
                     vpath = shared.get("pipeline", {}).get("video_path")
                 if vpath and os.path.isfile(vpath):
                     sz = os.path.getsize(vpath)
-                    self.send_response(200)
-                    self.send_header("Content-Type", "video/mp4")
-                    self.send_header("Content-Length", str(sz))
-                    self.end_headers()
-                    with open(vpath, "rb") as vf:
-                        self.wfile.write(vf.read())
+                    range_hdr = self.headers.get("Range")
+                    if range_hdr and range_hdr.startswith("bytes="):
+                        # 支持 Range 请求（浏览器 HTML5 video 必需）
+                        ranges = range_hdr[6:]
+                        start_str, end_str = ranges.split("-", 1)
+                        start = int(start_str) if start_str else 0
+                        end = int(end_str) if end_str else sz - 1
+                        end = min(end, sz - 1)
+                        length = end - start + 1
+                        self.send_response(206)
+                        self.send_header("Content-Type", "video/mp4")
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Range", f"bytes {start}-{end}/{sz}")
+                        self.send_header("Content-Length", str(length))
+                        self.end_headers()
+                        with open(vpath, "rb") as vf:
+                            vf.seek(start)
+                            self.wfile.write(vf.read(length))
+                    else:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "video/mp4")
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Length", str(sz))
+                        self.end_headers()
+                        with open(vpath, "rb") as vf:
+                            self.wfile.write(vf.read())
                 else:
                     self.send_error(404)
             elif self.path.startswith("/api/dataset/cameras"):
@@ -965,6 +1364,23 @@ def run_unified_web(
                 self.send_header("Content-Length", str(len(out)))
                 self.end_headers()
                 self.wfile.write(out)
+            elif self.path.startswith("/api/download/"):
+                # 下载 npy: /api/download/intrinsic, /api/download/extrinsic_coarse, /api/download/extrinsic_refined
+                key = self.path.rsplit("/", 1)[-1] + "_path"
+                with lock:
+                    fpath = shared.get("pipeline", {}).get(key)
+                if fpath and os.path.isfile(fpath):
+                    fname = os.path.basename(fpath)
+                    sz = os.path.getsize(fpath)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/octet-stream")
+                    self.send_header("Content-Disposition", f"attachment; filename={fname}")
+                    self.send_header("Content-Length", str(sz))
+                    self.end_headers()
+                    with open(fpath, "rb") as df:
+                        self.wfile.write(df.read())
+                else:
+                    self.send_error(404)
             else:
                 self.send_error(404)
 
@@ -974,7 +1390,7 @@ def run_unified_web(
             p = self.path.split("?")[0]
             if p in ("/api/sam/click", "/api/sam/undo", "/api/sam/set_image",
                       "/api/sam/switch_frame", "/api/done", "/api/finish",
-                      "/api/restart", "/api/dataset/load"):
+                      "/api/restart", "/api/reconfig", "/api/dataset/load"):
                 cmd_q.put((p, raw))
                 if p == "/api/dataset/load":
                     # 数据集加载需要等待结果
@@ -992,6 +1408,12 @@ def run_unified_web(
                     self.send_response(200)
                     self.end_headers()
                     self.wfile.write(b"{}")
+            elif p == "/api/pipeline/stop":
+                if pipeline_stop_event is not None:
+                    pipeline_stop_event.set()
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"ok":true}')
             else:
                 self.send_error(404)
 
@@ -1187,6 +1609,10 @@ def run_unified_web(
                 if path == "/api/finish":
                     session_done = True
                     break
+                elif path == "/api/reconfig":
+                    session_done = True
+                    result["val"]["reconfig"] = True
+                    break
                 elif path == "/api/restart":
                     break
         else:
@@ -1202,9 +1628,12 @@ def run_unified_web(
                 shared["status"] = "左键=前景 右键=背景"
                 shared["pts"] = 0
                 shared.pop("pipeline", None)
+            if pipeline_stop_event is not None:
+                pipeline_stop_event.clear()
             print("[web] 重新标注 — 页面已重置")
 
     srv.shutdown()
+    srv.server_close()
     th.join(timeout=2)
     if result["val"] is None:
         raise RuntimeError("未收到交互结果")

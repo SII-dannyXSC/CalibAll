@@ -59,7 +59,7 @@ class Recognizer:
         
         src_vec = F.normalize(self.vec) # 1, C
         trg_vec = F.normalize(trg_vec) # N, C, HW
-        cos_map = torch.matmul(src_vec, trg_vec).view(1, self.img_size, self.img_size).cpu().numpy() # N, H, W
+        cos_map = torch.matmul(src_vec, trg_vec).view(1, self.img_size, self.img_size).float().cpu().numpy() # N, H, W
 
         max_yx = np.unravel_index(cos_map[0].argmax(), cos_map[0].shape)
         
@@ -80,7 +80,7 @@ class Recognizer:
         
         src_vec = F.normalize(self.vec) # 1, C
         trg_vec = F.normalize(trg_vec) # N, C, HW
-        cos_map = torch.matmul(src_vec, trg_vec).view(1, self.img_size, self.img_size).cpu().numpy() # N, H, W
+        cos_map = torch.matmul(src_vec, trg_vec).view(1, self.img_size, self.img_size).float().cpu().numpy() # N, H, W
 
         max_yx = np.unravel_index(cos_map[0].argmax(), cos_map[0].shape)
         heatmap = cos_map[0]
