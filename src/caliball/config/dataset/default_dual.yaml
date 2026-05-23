@@ -1,5 +1,5 @@
 # 双臂默认配置：用户在 Web 端选两个 state_key，分别指定 start/stop
-name: 默认（双臂）
+name: default_dual_arm
 dataset:
   _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
   state_processor:

@@ -1,6 +1,6 @@
 """YAML-driven dataset construction service.
 
-Parses dataset YAML configs from ``config/web/``, determines whether
+Parses dataset YAML configs from ``config/dataset/``, determines whether
 the frontend should show state configuration controls, and constructs
 the dataset with appropriate StateProcessor.
 """
@@ -13,8 +13,8 @@ from typing import Optional
 import yaml
 
 
-# config/web/ YAML 目录
-_CONFIG_WEB_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "web"
+# config/dataset/ YAML directory
+_CONFIG_DATASET_DIR = Path(__file__).resolve().parent.parent.parent / "config" / "dataset"
 
 
 class DatasetBuilder:
@@ -38,9 +38,9 @@ class DatasetBuilder:
             按文件名排序，default.yaml 排在最前面。
         """
         configs = []
-        if not _CONFIG_WEB_DIR.is_dir():
+        if not _CONFIG_DATASET_DIR.is_dir():
             return configs
-        for p in sorted(_CONFIG_WEB_DIR.glob("*.yaml")):
+        for p in sorted(_CONFIG_DATASET_DIR.glob("*.yaml")):
             try:
                 with open(p) as f:
                     data = yaml.safe_load(f)
@@ -78,7 +78,7 @@ class DatasetBuilder:
                 "processor_params": dict,
             }
         """
-        yaml_path = _CONFIG_WEB_DIR / yaml_filename
+        yaml_path = _CONFIG_DATASET_DIR / yaml_filename
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
 
@@ -140,7 +140,7 @@ class DatasetBuilder:
         from caliball.dataset.lerobot_dataset import LeRobotDataset
         from caliball.dataset.state_processors import StateProcessor
 
-        yaml_path = _CONFIG_WEB_DIR / yaml_filename
+        yaml_path = _CONFIG_DATASET_DIR / yaml_filename
         with open(yaml_path) as f:
             data = yaml.safe_load(f)
 

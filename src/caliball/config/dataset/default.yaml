@@ -1,5 +1,5 @@
 # 单臂默认配置：用户在 Web 端选择 state_key 和 start/end
-name: 默认（单臂）
+name: default_single_arm
 dataset:
   _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
   state_processor:
