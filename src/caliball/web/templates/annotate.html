@@ -1,5 +1,5 @@
-<!DOCTYPE html><html lang=zh-CN><head><meta charset=UTF-8>
-<title>外参检测 - 交互标注</title><style>
+<!DOCTYPE html><html lang=en><head><meta charset=UTF-8>
+<title>Extrinsic Calibration - Annotation</title><style>
 *{box-sizing:border-box}
 body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 .step{border:1px solid #ddd;border-radius:6px;margin-bottom:12px;overflow:hidden}
@@ -36,38 +36,38 @@ body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 .mtab .x{margin-left:6px;color:#c00;font-weight:bold}
 </style></head><body>
 <div style="display:flex;justify-content:space-between;align-items:center">
-<h2>外参检测 - 交互标注</h2>
-<button onclick="reconfig()" style="padding:6px 16px;font-size:13px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:4px">返回配置</button>
+<h2>Extrinsic Calibration - Annotation</h2>
+<button onclick="reconfig()" style="padding:6px 16px;font-size:13px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:4px">Back to Config</button>
 </div>
 {{ dataset_html | safe }}{{ robot_html | safe }}
 <!-- Step 1: Frame Selection -->
 <section class=step>
-<div class=sh><h3>1. 帧选择</h3>
-<label class=tg><input type=checkbox id=fa onchange="tog('f')"> 使用默认</label></div>
+<div class=sh><h3>1. Frame Selection</h3>
+<label class=tg><input type=checkbox id=fa onchange="tog('f')"> Use Default</label></div>
 <div class=si id=fi></div>
 <div class='sb' id=fb>
 <div class=mb id=fmb>
-<button class=a data-m=start onclick="sfm('start')">起始帧</button>
-<button data-m=end onclick="sfm('end')">结束帧</button>
-<button data-m=mask onclick="sfm('mask')">mask参考帧(多选)</button></div>
+<button class=a data-m=start onclick="sfm('start')">Start Frame</button>
+<button data-m=end onclick="sfm('end')">End Frame</button>
+<button data-m=mask onclick="sfm('mask')">Mask Ref Frame (multi)</button></div>
 <div class=lg>
-<span><i style='border-color:#0a0'></i>起始</span>
-<span><i style='border-color:#c00'></i>结束</span>
-<span><i style='border-color:#06f'></i>mask帧</span></div>
+<span><i style='border-color:#0a0'></i>Start</span>
+<span><i style='border-color:#c00'></i>End</span>
+<span><i style='border-color:#06f'></i>Mask</span></div>
 <div class=grid id=fg></div></div></section>
 <!-- Step 2: Tracking Point -->
 <section class=step>
-<div class=sh><h3>2. 追踪点</h3>
+<div class=sh><h3>2. Tracking Point</h3>
 <span style='display:flex;gap:8px;align-items:center'>
 {% if is_dual_arm %}
 <select id="arm-sel" style="padding:3px 8px;font-size:12px;border-radius:3px">
-  <option value="0">左臂</option>
-  <option value="1">右臂</option>
+  <option value="0">Left Arm</option>
+  <option value="1">Right Arm</option>
 </select>
 {% endif %}
-<button onclick=autoTracking() style='padding:3px 10px;font-size:12px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:3px'>自动 (DINOv2)</button>
+<button onclick=autoTracking() style='padding:3px 10px;font-size:12px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:3px'>Auto (DINOv2)</button>
 <span id=at-msg style='font-size:11px;color:#666'></span>
-<label class=tg id=tl><input type=checkbox id=ta {% if has_default_tracking %}checked{% endif %} onchange="tog('t')"> 使用默认</label>
+<label class=tg id=tl><input type=checkbox id=ta {% if has_default_tracking %}checked{% endif %} onchange="tog('t')"> Use Default</label>
 </span></div>
 <div class=si id=ti></div>
 <div class='sb{% if has_default_tracking %} off{% endif %}' id=tb>
@@ -76,19 +76,19 @@ body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 </div></section>
 <!-- Step 3: Multi-mask -->
 <section class=step>
-<div class=sh><h3>3. Mask（多帧）</h3>
+<div class=sh><h3>3. Mask (Multi-frame)</h3>
 <span style='display:flex;gap:8px;align-items:center'>
-<button onclick=autoDetect() style='padding:3px 10px;font-size:12px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:3px'>SAM3 自动</button>
+<button onclick=autoDetect() style='padding:3px 10px;font-size:12px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:3px'>SAM3 Auto</button>
 <span id=auto-msg style='font-size:11px;color:#666'></span>
-<label class=tg id=ml><input type=checkbox id=mau {% if has_default_masks %}checked{% endif %} onchange="tog('m')"> 使用默认</label>
+<label class=tg id=ml><input type=checkbox id=mau {% if has_default_masks %}checked{% endif %} onchange="tog('m')"> Use Default</label>
 </span></div>
 <div class=si id=mi></div>
 <div class='sb{% if has_default_masks %} off{% endif %}' id=mmb>
 <div class=mtabs id=mtabs></div>
-<div class=sb2><button onclick=samUndo()>撤销</button>
-<span id=ms>左键=前景 右键=背景</span></div>
+<div class=sb2><button onclick=samUndo()>Undo</button>
+<span id=ms>Left=foreground Right=background</span></div>
 <div id=mw><img id=mimg src='{{ initial_overlay }}'/></div></div></section>
-<button id=sub onclick=go()>确认并保存</button>
+<button id=sub onclick=go()>Submit</button>
 <section class=step id=pipeline>
 <div class=sh><h3>Pipeline</h3></div>
 <div class=sb>
@@ -97,14 +97,14 @@ body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 <div class=ps id=ps-coarse>&#9203; Coarse Init (PnP)</div>
 <div class=ps id=ps-refine>&#9203; Refinement <span id=p-step></span></div>
 </div>
-<button id=stop-btn onclick='stopRefine()' style='display:none;margin:8px 0;padding:6px 16px;font-size:14px;cursor:pointer;background:#c00;color:#fff;border:none;border-radius:4px'>停止优化</button>
-<p id=p-msg style='margin:8px 0;font-size:14px'>等待标注完成...</p>
+<button id=stop-btn onclick='stopRefine()' style='display:none;margin:8px 0;padding:6px 16px;font-size:14px;cursor:pointer;background:#c00;color:#fff;border:none;border-radius:4px'>Stop Refinement</button>
+<p id=p-msg style='margin:8px 0;font-size:14px'>Waiting for annotation...</p>
 <div class=mtabs id=p-mtabs style='display:none'></div>
 <img id=p-img style='max-width:100%;max-height:50vh;display:none;margin-top:8px'/>
 </div></section>
-<button id=fin-btn onclick=fin()>退出</button>
-<button id=restart-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:6px' onclick=restart()>重新标注</button>
-<button id=reconfig-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:6px' onclick=reconfig()>更换数据集</button>
+<button id=fin-btn onclick=fin()>Exit</button>
+<button id=restart-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;cursor:pointer;background:#06f;color:#fff;border:none;border-radius:6px' onclick=restart()>Re-annotate</button>
+<button id=reconfig-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:6px' onclick=reconfig()>Change Dataset</button>
 <!-- JavaScript -->
 <script>
 var T={{ thumbs | tojson }};
@@ -130,7 +130,7 @@ g.appendChild(d);}}
 function pickF(i){
 if(S.fm==='start'){S.s=i;if(S.e<i)S.e=i;}
 else if(S.fm==='end'){S.e=i;if(S.s>i)S.s=i;}
-else{/* mask mode: toggle (不限制在 start-end 范围内) */
+else{/* mask mode: toggle (not restricted to start-end range) */
 var idx=S.ms.indexOf(i);
 if(idx>=0){if(S.ms.length>1)S.ms.splice(idx,1);}
 else{S.ms.push(i);S.ms.sort(function(a,b){return a-b;});}
@@ -147,9 +147,9 @@ function renderMTabs(){
 var c=document.getElementById('mtabs');c.innerHTML='';
 S.ms.forEach(function(m,i){
 var b=document.createElement('div');b.className='mtab'+(i===S.curMI?' a':'');
-b.textContent='帧 '+m;
+b.textContent='Frame '+m;
 var pts=samPtsMap[m]||0;
-if(pts>0){var sp=document.createElement('span');sp.textContent=' ('+pts+'点)';sp.style.fontSize='11px';b.appendChild(sp);}
+if(pts>0){var sp=document.createElement('span');sp.textContent=' ('+pts+' pts)';sp.style.fontSize='11px';b.appendChild(sp);}
 b.onclick=function(){switchMask(i);};
 c.appendChild(b);});}
 /* Switch mask tab */
@@ -210,11 +210,11 @@ var samTimer=setInterval(pollSam,300);
 function upInfo(){
 var totalPts=0;S.ms.forEach(function(m){totalPts+=(samPtsMap[m]||0);});
 document.getElementById('fi').textContent=
-'起始帧: '+S.s+' | 结束帧: '+S.e+' | mask帧: ['+S.ms.join(',')+'] | 长度: '+(S.e-S.s+1);
+'Start: '+S.s+' | End: '+S.e+' | Mask frames: ['+S.ms.join(',')+'] | Length: '+(S.e-S.s+1);
 document.getElementById('ti').textContent=
-S.tx!==null?'追踪点: ('+S.tx.toFixed(1)+', '+S.ty.toFixed(1)+')':'追踪点: 未选择';
+S.tx!==null?'Tracking: ('+S.tx.toFixed(1)+', '+S.ty.toFixed(1)+')':'Tracking: not selected';
 document.getElementById('mi').textContent=
-S.ma?'mask: 使用默认 ('+S.ms.length+'帧)':'mask: SAM '+S.ms.length+'帧, 共'+totalPts+'点';}
+S.ma?'Mask: using default ('+S.ms.length+' frames)':'Mask: SAM '+S.ms.length+' frames, '+totalPts+' pts';}
 /* Dataset switch */
 function switchDs(){
 var sel=document.getElementById('ds');
@@ -224,20 +224,20 @@ d.cameras.forEach(function(n){var o=document.createElement('option');o.value=n;o
 function loadDs(){
 var di=document.getElementById('ds').value;
 var cn=document.getElementById('cam').value;
-document.getElementById('ds-status').textContent='加载中…';
+document.getElementById('ds-status').textContent='Loading...';
 fetch('/api/dataset/load',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({dataset_idx:parseInt(di),camera:cn})})
 .then(function(r){return r.json()}).then(function(d){
-if(d.ok){document.getElementById('ds-status').textContent='已加载 '+d.n_frames+' 帧';
+if(d.ok){document.getElementById('ds-status').textContent='Loaded '+d.n_frames+' frames';
 T=d.thumbs;S.s=0;S.e=d.n_frames-1;S.ms=[0];S.curMI=0;samPtsMap={0:0};
 renderGrid();renderMTabs();upInfo();upTImg();}
-else{document.getElementById('ds-status').textContent='加载失败: '+(d.error||'');}});}
+else{document.getElementById('ds-status').textContent='Load failed: '+(d.error||'');}});}
 /* Submit */
 function go(){
-if(S.tx===null||S.ty===null){alert('请选择追踪点');return;}
+if(S.tx===null||S.ty===null){alert('Please select a tracking point');return;}
 if(!S.ma){
 var missing=[];S.ms.forEach(function(m){if(!samPtsMap[m]||samPtsMap[m]===0)missing.push(m);});
-if(missing.length>0){alert('以下mask帧尚未标注: '+missing.join(', '));return;}}
+if(missing.length>0){alert('These mask frames are not annotated: '+missing.join(', '));return;}}
 fetch('/api/done',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({start:S.s,end:S.e,maskRefs:S.ms,
 trackingX:S.tx,trackingY:S.ty,maskAuto:S.ma,
@@ -250,7 +250,7 @@ document.getElementById('sub').style.display='none';
 document.getElementById('pipeline').style.display='block';
 pipeTimer=setInterval(pollPipe,1000);
 }else{document.body.innerHTML=
-'<p style="text-align:center;margin-top:3rem;font-size:18px">已提交，可关闭此页面。</p>';}});}
+'<p style="text-align:center;margin-top:3rem;font-size:18px">Submitted. You may close this page.</p>';}});}
 /* Init */
 renderGrid();renderMTabs();upInfo();upDot();
 if(!HDT){document.getElementById('tl').style.display='none';
@@ -265,7 +265,7 @@ if(pMaskIds.length<=1){c.style.display='none';return;}
 c.style.display='flex';c.innerHTML='';
 pMaskIds.forEach(function(m,i){
 var b=document.createElement('div');b.className='mtab'+(i===pCurOv?' a':'');
-b.textContent='帧 '+m;
+b.textContent='Frame '+m;
 b.onclick=function(){pCurOv=i;renderPTabs();
 if(pOverlays[i]){var img=document.getElementById('p-img');img.src=pOverlays[i];img.style.display='';}};
 c.appendChild(b);});}
@@ -297,7 +297,7 @@ else if(d.image){var img=document.getElementById('p-img');img.src=d.image;img.st
 /* Show tracking video as soon as available */
 if(d.tracking_video_path&&!document.getElementById('trk-video')){
 var c2=document.getElementById('p-img').parentNode;
-var th=document.createElement('h4');th.style.marginTop='12px';th.textContent='Tracking 视频';c2.appendChild(th);
+var th=document.createElement('h4');th.style.marginTop='12px';th.textContent='Tracking Video';c2.appendChild(th);
 var v2=document.createElement('video');v2.id='trk-video';
 v2.src='/api/tracking_video';v2.controls=true;v2.loop=true;v2.muted=true;v2.autoplay=true;
 v2.style.maxWidth='100%';v2.style.maxHeight='50vh';v2.style.marginTop='4px';
@@ -317,10 +317,10 @@ md.innerHTML='<h4 style="margin:8px 0 4px">Intrinsic (K)</h4>'
 +'<h4 style="margin:8px 0 4px">Extrinsic (Coarse)</h4>'
 +'<pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto">'+(d.extrinsic_coarse_str||'N/A')+'</pre>'
 +'<div style="margin-top:8px;font-size:14px">'
-+'<a href="/api/download/intrinsic" download style="margin-right:12px">下载 intrinsic.npy</a>'
-+'<a href="/api/download/extrinsic_refined" download style="margin-right:12px">下载 extrinsic_refined.npy</a>'
-+'<a href="/api/download/extrinsic_coarse" download>下载 extrinsic_coarse.npy</a>'
-+'<br/><a href="/api/download/calibration" download style="margin-top:8px;display:inline-block;font-weight:bold;color:#06f">下载 calibration.yaml</a>'
++'<a href="/api/download/intrinsic" download style="margin-right:12px">Download intrinsic.npy</a>'
++'<a href="/api/download/extrinsic_refined" download style="margin-right:12px">Download extrinsic_refined.npy</a>'
++'<a href="/api/download/extrinsic_coarse" download>Download extrinsic_coarse.npy</a>'
++'<br/><a href="/api/download/calibration" download style="margin-top:8px;display:inline-block;font-weight:bold;color:#06f">Download calibration.yaml</a>'
 +'</div>';
 mc.appendChild(md);}
 /* Video */
@@ -331,46 +331,46 @@ v.style.maxWidth='100%';v.style.maxHeight='50vh';v.style.marginTop='8px';
 v.setAttribute('playsinline','');
 var c=document.getElementById('p-img').parentNode;c.appendChild(v);
 var dl=document.createElement('a');dl.href='/api/video';dl.download='anno_video.mp4';
-dl.textContent='下载视频';dl.style.display='block';dl.style.marginTop='8px';dl.style.fontSize='14px';
+dl.textContent='Download Video';dl.style.display='block';dl.style.marginTop='8px';dl.style.fontSize='14px';
 c.appendChild(dl);}
 /* Tracking video (skip if already shown in coarse stage) */
 if(d.tracking_video_path&&!document.getElementById('trk-video')){
 var c2=document.getElementById('p-img').parentNode;
-var th=document.createElement('h4');th.style.marginTop='16px';th.textContent='Tracking 视频';c2.appendChild(th);
+var th=document.createElement('h4');th.style.marginTop='16px';th.textContent='Tracking Video';c2.appendChild(th);
 var v2=document.createElement('video');v2.id='trk-video';
 v2.src='/api/tracking_video';v2.controls=true;v2.loop=true;v2.muted=true;
 v2.style.maxWidth='100%';v2.style.maxHeight='50vh';v2.style.marginTop='4px';
 v2.setAttribute('playsinline','');c2.appendChild(v2);
 var dl2=document.createElement('a');dl2.href='/api/tracking_video';dl2.download='tracking.mp4';
-dl2.textContent='下载 tracking 视频';dl2.style.display='block';dl2.style.marginTop='8px';dl2.style.fontSize='14px';
+dl2.textContent='Download Tracking Video';dl2.style.display='block';dl2.style.marginTop='8px';dl2.style.fontSize='14px';
 c2.appendChild(dl2);}}
 }).catch(function(e){console.error('pollPipe error:',e);});}
 function fin(){
 fetch('/api/finish',{method:'POST'}).then(function(){
-document.body.innerHTML='<p style="text-align:center;margin-top:3rem;font-size:18px">已完成</p>';});}
+document.body.innerHTML='<p style="text-align:center;margin-top:3rem;font-size:18px">Done</p>';});}
 function autoDetect(){
-document.getElementById('auto-msg').textContent='检测中…';
+document.getElementById('auto-msg').textContent='Detecting...';
 var fi=S.ms[S.curMI];
 fetch('/api/auto_detect',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:fi})})
 .then(function(r){return r.json()}).then(function(d){
 if(d.ok){
-document.getElementById('auto-msg').textContent='mask 已生成';document.getElementById('auto-msg').style.color='#090';
+document.getElementById('auto-msg').textContent='Mask generated';document.getElementById('auto-msg').style.color='#090';
 if(d.overlay){document.getElementById('mimg').src=d.overlay;}
 samPtsMap[fi]=-1;renderMTabs();
-}else{document.getElementById('auto-msg').textContent=d.error||'检测失败';document.getElementById('auto-msg').style.color='#c00';}
-}).catch(function(){document.getElementById('auto-msg').textContent='请求失败';document.getElementById('auto-msg').style.color='#c00';});}
+}else{document.getElementById('auto-msg').textContent=d.error||'Detection failed';document.getElementById('auto-msg').style.color='#c00';}
+}).catch(function(){document.getElementById('auto-msg').textContent='Request failed';document.getElementById('auto-msg').style.color='#c00';});}
 function autoTracking(){
-document.getElementById('at-msg').textContent='识别中…';
+document.getElementById('at-msg').textContent='Recognizing...';
 fetch('/api/auto_tracking',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:S.ms[S.curMI],target_fi:S.s})})
 .then(function(r){return r.json()}).then(function(d){
 if(d.ok){
 S.tx=d.tracking_x;S.ty=d.tracking_y;upDot();upTImg();upInfo();
-document.getElementById('at-msg').textContent='追踪点已生成 ('+d.tracking_x.toFixed(1)+','+d.tracking_y.toFixed(1)+')';
+document.getElementById('at-msg').textContent='Tracking point set ('+d.tracking_x.toFixed(1)+','+d.tracking_y.toFixed(1)+')';
 document.getElementById('at-msg').style.color='#090';
-}else{document.getElementById('at-msg').textContent=d.error||'识别失败';document.getElementById('at-msg').style.color='#c00';}
-}).catch(function(){document.getElementById('at-msg').textContent='请求失败';document.getElementById('at-msg').style.color='#c00';});}
+}else{document.getElementById('at-msg').textContent=d.error||'Recognition failed';document.getElementById('at-msg').style.color='#c00';}
+}).catch(function(){document.getElementById('at-msg').textContent='Request failed';document.getElementById('at-msg').style.color='#c00';});}
 function restart(){
 if(pipeTimer)clearInterval(pipeTimer);
 if(typeof samTimer!=='undefined')clearInterval(samTimer);
@@ -384,5 +384,5 @@ setTimeout(function(){window.location.href='/';},300);})
 function stopRefine(){
 fetch('/api/pipeline/stop',{method:'POST'}).then(function(){
 document.getElementById('stop-btn').disabled=true;
-document.getElementById('stop-btn').textContent='正在停止…';});}
+document.getElementById('stop-btn').textContent='Stopping...';});}
 </script></body></html>

@@ -1,11 +1,11 @@
 """
-CalibAll Web — 外参标定 Web 交互入口
-=====================================
+CalibAll Web — Extrinsic Calibration Web Interface
+===================================================
 
-用法（无需任何参数，所有配置在 Web 端完成）:
+Usage (no arguments needed, all config done in browser):
   PYTHONPATH=. python scripts/caliball_web.py
 
-可选服务级参数:
+Optional server arguments:
   PYTHONPATH=. python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
 """
 
@@ -41,7 +41,7 @@ from caliball.web.services.dataset_builder import DatasetBuilder
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="CalibAll Web: 外参检测交互标注（所有配置在 Web 端完成）")
+    p = argparse.ArgumentParser(description="CalibAll Web: extrinsic calibration (all config in browser)")
     p.add_argument("--host", type=str, default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--device", type=str, default="cuda")
@@ -55,7 +55,7 @@ def parse_args():
                    default="third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz")
     p.add_argument("--sam-ckpt-path", type=str, default="ckpt/sam3/sam3.pt")
     p.add_argument("--config", type=str, default=None,
-                   help="从已保存的 config.json 启动（无 Web，直接跑 pipeline）")
+                   help="Run pipeline from saved config.json (no Web)")
     return p.parse_args()
 
 
@@ -112,14 +112,14 @@ def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None
 
     bpe = _PROJECT_ROOT / sam_bpe_path if not Path(sam_bpe_path).is_absolute() else Path(sam_bpe_path)
     ckpt = _PROJECT_ROOT / sam_ckpt_path if not Path(sam_ckpt_path).is_absolute() else Path(sam_ckpt_path)
-    _up("加载 SAM3…", 75)
+    _up("Loading SAM3...", 75)
     sam3_model = build_sam3_image_model(
         bpe_path=str(bpe), checkpoint_path=str(ckpt),
         device=device, enable_inst_interactivity=True,
     )
     sam3_processor = Sam3Processor(sam3_model, device=device)
 
-    _up("所有模型已加载", 100)
+    _up("All models loaded", 100)
     return coarse_init, refinement, sam3_model, sam3_processor, model_config
 
 
@@ -145,7 +145,7 @@ def _run_from_config(args, result_dir, manual_label_dir):
     if not mask_paths and cfg.get("mask_save_path"):
         mask_paths = [cfg["mask_save_path"]]
     if not mask_paths:
-        raise SystemExit("config 中缺少 mask_save_paths")
+        raise SystemExit("config missing mask_save_paths")
     masks = [np.load(p).astype(np.uint8) for p in mask_paths]
 
     print(f"[config] task={task_path}, camera={camera_name}, robot={robot_type}")
@@ -205,7 +205,7 @@ def _run_from_config(args, result_dir, manual_label_dir):
     mask_ids = [mr - start_idx for mr in mask_frame_idxs]
 
     output = pipeline.run(clip, clip_joint, tracking_point, masks, mask_ids, pipe_save)
-    print(f"Pipeline 完成: {output['save_dir']}")
+    print(f"Pipeline done: {output['save_dir']}")
 
     # Save
     dataset_name_fs = dataset_name.replace("/", ".")
@@ -283,8 +283,8 @@ def main():
     while True:
         # ── Phase 0: Wait for config ──
         shared_state.set("config_done", False)
-        shared_state.set("loading_status", {"message": "准备中…", "progress": 0, "done": False})
-        print("等待用户在浏览器中配置数据集…")
+        shared_state.set("loading_status", {"message": "Preparing...", "progress": 0, "done": False})
+        print("Waiting for dataset configuration in browser...")
         while not shared_state.get("config_done"):
             time.sleep(0.2)
 
@@ -299,10 +299,10 @@ def main():
         yaml_filename = web_cfg.get("yaml_filename", "default.yaml")
         overrides = web_cfg.get("overrides")
 
-        print(f"配置: task_path={task_path}, camera={camera_name}, yaml={yaml_filename}")
+        print(f"Config: task_path={task_path}, camera={camera_name}, yaml={yaml_filename}")
 
         # ── Load dataset via DatasetBuilder ──
-        _update_loading("加载数据集…", 5)
+        _update_loading("Loading dataset...", 5)
         try:
             dataset, ds_info = DatasetBuilder.build(
                 yaml_filename, task_path,
@@ -317,18 +317,18 @@ def main():
             joint_angles = joint_angles[::strike]
             print(f"video shape = {video.shape}, joint shape = {joint_angles.shape}")
         except Exception as e:
-            _update_loading(f"数据集加载失败: {e}", 0)
-            print(f"数据集加载失败: {e}")
+            _update_loading(f"Dataset loading failed: {e}", 0)
+            print(f"Dataset loading failed: {e}")
             continue
 
         n_frames = len(video)
         if n_frames == 0:
-            _update_loading("视频长度为 0", 0)
+            _update_loading("Video length is 0", 0)
             continue
 
         # ── Load models (first time only) ──
         if not models_loaded:
-            _update_loading("加载模型…", 10)
+            _update_loading("Loading models...", 10)
             coarse_init, refinement, sam3_model, sam3_processor, model_config = _load_models(
                 args.device, robot_type, args.sam_bpe_path, args.sam_ckpt_path, _update_loading,
             )
@@ -351,7 +351,7 @@ def main():
             ref_img_path = _PROJECT_ROOT / "assets" / "test_img" / "source.png"
             if ref_img_path.exists():
                 coarse_init._init_recognizer(Image.open(ref_img_path).convert("RGB"), (376, 131))
-                print("[web] Recognizer 已用默认参考图初始化")
+                print("[web] Recognizer initialized with default reference")
             models_loaded = True
         else:
             if robot_type != model_config.robot_type:
@@ -362,8 +362,8 @@ def main():
             pipeline.reset_intrinsic()
 
         # ── Prepare annotate page ──
-        _update_loading("生成缩略图…", 90)
-        print(f"[web] 生成 {n_frames} 帧缩略图…")
+        _update_loading("Generating thumbnails...", 90)
+        print(f"[web] Generating {n_frames} thumbnails...")
         thumbs = [image_to_thumb_url(f) for f in video]
 
         start_idx, end_idx = 0, n_frames - 1
@@ -381,12 +381,12 @@ def main():
                 for rt in _robot_types
             )
             robot_html = (
-                "<div style='margin-bottom:12px'><label style='font-size:14px'>机型: "
+                "<div style='margin-bottom:12px'><label style='font-size:14px'>Robot: "
                 f"<select id=rt style='padding:4px 8px;font-size:14px'>{_opts}</select>"
                 "</label></div>"
             )
 
-        shared_state.update_overlay(initial_overlay, "左键=前景 右键=背景", 0)
+        shared_state.update_overlay(initial_overlay, "Left=foreground Right=background", 0)
         shared_state.clear_pipeline()
         app.config["frames"] = video
         app.config["annotate_context"] = {
@@ -398,8 +398,8 @@ def main():
             "initial_overlay": initial_overlay, "tracking_url": tracking_url,
             "robot_html": robot_html, "dataset_html": "",
         }
-        shared_state.set("loading_status", {"message": "加载完成", "progress": 100, "done": True})
-        print("[web] 标注页面已就绪")
+        shared_state.set("loading_status", {"message": "Loading complete", "progress": 100, "done": True})
+        print("[web] Annotate page ready")
 
         # ── Annotation + Pipeline loop ──
         session_done = False
@@ -420,22 +420,22 @@ def main():
                     fi = int(d["idx"])
                     sam_svc.set_image(fi, video[fi])
                     fs = sam_svc.get_frame_state(fi)
-                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"已切换到帧 {fi}", 0)
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"Switched to frame {fi}", 0)
                 elif path == "/api/sam/switch_frame":
                     fi = int(d["fi"])
                     sam_svc.switch_frame(fi, video[fi])
                     fs = sam_svc.get_frame_state(fi)
-                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: {len(fs['points'])} 点", len(fs["points"]))
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"Frame {fi}: {len(fs['points'])} pts", len(fs["points"]))
                 elif path == "/api/sam/click":
                     fi = int(d.get("fi", sam_svc.active_frame))
                     sam_svc.add_point(fi, float(d["x"]), float(d["y"]), int(d.get("label", 1)), video[fi])
                     fs = sam_svc.get_frame_state(fi)
-                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: {len(fs['points'])} 点", len(fs["points"]))
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"Frame {fi}: {len(fs['points'])} pts", len(fs["points"]))
                 elif path == "/api/sam/undo":
                     fi = int(d.get("fi", sam_svc.active_frame))
                     sam_svc.undo(fi)
                     fs = sam_svc.get_frame_state(fi)
-                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"帧 {fi}: 撤销后 {len(fs['points'])} 点", len(fs["points"]))
+                    shared_state.update_overlay(_overlay_vis(video[fi], fs["mask"], fs["points"], fs["labels"]), f"Frame {fi}: {len(fs['points'])} pts after undo", len(fs["points"]))
                 elif path == "/api/auto_detect":
                     fi = int(d.get("fi", 0))
                     resp_q = app.config.get("auto_detect_resp_q")
@@ -456,12 +456,12 @@ def main():
                             fs["labels"] = []
                             fs["mask"] = mask
                             overlay_url = _overlay_vis(video[fi], mask, [], [])
-                            shared_state.update_overlay(overlay_url, f"SAM3 自动检测完成 帧{fi}", len(fs["points"]))
+                            shared_state.update_overlay(overlay_url, f"SAM3 auto-detect done frame {fi}", len(fs["points"]))
                             if resp_q:
                                 resp_q.put({"ok": True, "overlay": overlay_url})
                         else:
                             if resp_q:
-                                resp_q.put({"ok": False, "error": "未检测到机械臂"})
+                                resp_q.put({"ok": False, "error": "No robotic arm detected"})
                     except Exception as e:
                         if resp_q:
                             resp_q.put({"ok": False, "error": str(e)})
@@ -501,7 +501,7 @@ def main():
                 gc.collect()
                 s, e = result_val["start"], result_val["end"]
                 mask_refs = result_val["mask_refs"]
-                # 扩展 clip 范围以覆盖 mask 参考帧（可能在 start-end 之外）
+                # Extend clip range to cover mask ref frames (may be outside start-end)
                 clip_start = min(s, *mask_refs)
                 clip_end = max(e, *mask_refs)
                 clip, clip_joint = video[clip_start:clip_end+1], joint_angles[clip_start:clip_end+1]
@@ -547,10 +547,10 @@ def main():
                     calib_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(calib_path, "w") as f:
                         _yaml.dump(calib_data, f, default_flow_style=None, allow_unicode=True)
-                    print(f"Calibration yaml 已保存: {calib_path}")
+                    print(f"Calibration yaml saved: {calib_path}")
 
                     shared_state.update_pipeline(
-                        stage="done", message="Pipeline 完成！",
+                        stage="done", message="Pipeline complete!",
                         video_path=output.get("anno_video_path"),
                         tracking_video_path=output.get("tracking_video_path"),
                         intrinsic_path=str(pipe_save / "intrinsic.npy"),
@@ -563,7 +563,7 @@ def main():
                     )
                 except Exception as exc:
                     import traceback; traceback.print_exc()
-                    shared_state.update_pipeline(stage="done", message=f"Pipeline 出错: {exc}")
+                    shared_state.update_pipeline(stage="done", message=f"Pipeline error: {exc}")
 
             # Phase 3: Wait for restart/finish/reconfig
             while True:
@@ -584,7 +584,7 @@ def main():
                 shared_state.reset(initial_overlay)
                 shared_state.clear_pipeline()
                 pipeline_stop.clear()
-                print("[web] 重新标注 — 页面已重置")
+                print("[web] Re-annotate — page reset")
 
         # ── Save results ──
         if result_val is not None and pipeline_output is not None:
@@ -606,11 +606,11 @@ def main():
                 "tracking_point": list(result_val["tracking_point"]),
                 "mask_save_paths": mask_save_paths,
             }, manual_label_dir / f"{prefix}.config.json")
-            print(f"Config 已保存: manual_label/{prefix}.config.json")
+            print(f"Config saved: manual_label/{prefix}.config.json")
 
         # ── Reconfig or exit ──
         if reconfig_requested:
-            print("[web] 返回配置页面…")
+            print("[web] Returning to config page...")
             pipeline_stop.clear()
             while not cmd_q.empty():
                 try: cmd_q.get_nowait()

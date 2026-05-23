@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>数据集配置</title>
+<title>Dataset Configuration</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
@@ -25,35 +25,35 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
 </style>
 </head>
 <body>
-<h2>数据集配置</h2>
+<h2>Dataset Configuration</h2>
 
-<!-- task-path + 扫描 -->
+<!-- task-path + scan -->
 <div class="scan-row" style="margin-bottom:12px">
   <div class="f">
-    <label>数据集路径 (task-path)</label>
+    <label>Dataset Path (task-path)</label>
     <input id="tp" placeholder="/path/to/lerobot_dataset/task_name"
            value="{{ default_task_path }}"/>
   </div>
-  <button onclick="scanPath()" style="margin-bottom:0">扫描</button>
+  <button onclick="scanPath()" style="margin-bottom:0">Scan</button>
 </div>
 <p id="scan-msg" style="font-size:13px;margin:0 0 8px 0"></p>
 
 <!-- dataset-name / camera -->
 <div class="row">
   <div class="f">
-    <label>dataset-name（自动推断，可修改）</label>
-    <input id="dn" placeholder="如 robomind.franka_3rgb"
+    <label>dataset-name (auto-inferred, editable)</label>
+    <input id="dn" placeholder="e.g. robomind.franka_3rgb"
            value="{{ default_dataset_name }}"/>
   </div>
   <div class="f">
     <label>camera-name</label>
-    <select id="cn"><option value="">请先扫描路径</option></select>
+    <select id="cn"><option value="">Scan path first</option></select>
   </div>
 </div>
 
-<!-- YAML 配置选择 -->
+<!-- YAML config selection -->
 <div class="f">
-  <label>数据集配置</label>
+  <label>Dataset Config</label>
   <select id="yaml-sel" onchange="onYamlChange()">
     {% for yc in yaml_configs %}
     <option value="{{ yc.filename }}">{{ yc.name }}</option>
@@ -61,15 +61,15 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
   </select>
 </div>
 
-<!-- 固定配置提示（不可配置时显示） -->
+<!-- Fixed config hint (shown when not configurable) -->
 <div id="yaml-fixed" class="yaml-fixed hidden"></div>
 
-<!-- state_key 配置区域（可配置时显示） -->
+<!-- state_key config area (shown when configurable) -->
 <div id="state-section" class="state-section">
   <div class="row">
     <div class="f" style="flex:2">
-      <label id="stk-label">state_key (关节数据列)</label>
-      <select id="stk" onchange="onStkChange()"><option value="">请先扫描路径</option></select>
+      <label id="stk-label">state_key (joint data column)</label>
+      <select id="stk" onchange="onStkChange()"><option value="">Scan path first</option></select>
     </div>
     <div class="f" style="flex:0.5">
       <label>start</label>
@@ -84,11 +84,11 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
     </div>
   </div>
 
-  <!-- 双臂: 第二个 state_key（DualArmSliceProcessor 时显示） -->
+  <!-- Dual arm: second state_key (shown for DualArmSliceProcessor) -->
   <div id="dual-arm-row" class="row" style="display:none">
     <div class="f" style="flex:2">
-      <label>state_key 2 (右臂关节)</label>
-      <select id="stk2" onchange="onStk2Change()"><option value="">请先扫描路径</option></select>
+      <label>state_key 2 (right arm joints)</label>
+      <select id="stk2" onchange="onStk2Change()"><option value="">Scan path first</option></select>
     </div>
     <div class="f" style="flex:0.5">
       <label>start</label>
@@ -107,7 +107,7 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
 <!-- robot-type / episode -->
 <div class="row">
   <div class="f">
-    <label>机型 (robot-type)</label>
+    <label>Robot Type</label>
     <select id="rt">
       {% for rt in robot_types %}
       <option value="{{ rt }}" {{ 'selected' if rt == default_robot_type else '' }}>{{ rt }}</option>
@@ -123,12 +123,12 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
 <!-- strike -->
 <div class="row">
   <div class="f">
-    <label>strike (抽帧间隔)</label>
+    <label>strike (frame stride)</label>
     <input id="sk" type="number" value="{{ default_strike }}"/>
   </div>
 </div>
 
-<button id="go" onclick="go()">加载数据集</button>
+<button id="go" onclick="go()">Load Dataset</button>
 <p id="msg"></p>
 
 <script>
@@ -154,15 +154,15 @@ function onYamlChange() {
       yamlFixed.classList.add('hidden');
       if (info.processor_type === 'DualArmSliceProcessor') {
         dualRow.style.display = 'flex';
-        document.getElementById('stk-label').textContent = 'state_key (左臂关节)';
+        document.getElementById('stk-label').textContent = 'state_key (left arm joints)';
       } else {
         dualRow.style.display = 'none';
-        document.getElementById('stk-label').textContent = 'state_key (关节数据列)';
+        document.getElementById('stk-label').textContent = 'state_key (joint data column)';
       }
     } else {
       stateSection.classList.add('hidden');
       yamlFixed.classList.remove('hidden');
-      yamlFixed.textContent = '使用 YAML 配置: ' + info.name +
+      yamlFixed.textContent = 'Using YAML config: ' + info.name +
         (info.state_keys ? ' — state_keys: ' + info.state_keys.join(', ') : '') +
         (info.processor_params && Object.keys(info.processor_params).length
           ? ' — ' + JSON.stringify(info.processor_params) : '');
@@ -174,7 +174,7 @@ function onStkChange() {
   var sel = document.getElementById('stk');
   var opt = sel.options[sel.selectedIndex];
   var dim = opt ? (opt.dataset.dim || '') : '';
-  document.getElementById('stk-dim').textContent = dim ? '总维度: ' + dim : '';
+  document.getElementById('stk-dim').textContent = dim ? 'Total dim: ' + dim : '';
   document.getElementById('stk-start').value = 0;
   document.getElementById('stk-end').value = dim || '';
   document.getElementById('stk-end').placeholder = dim || 'all';
@@ -184,7 +184,7 @@ function onStk2Change() {
   var sel = document.getElementById('stk2');
   var opt = sel.options[sel.selectedIndex];
   var dim = opt ? (opt.dataset.dim || '') : '';
-  document.getElementById('stk2-dim').textContent = dim ? '总维度: ' + dim : '';
+  document.getElementById('stk2-dim').textContent = dim ? 'Total dim: ' + dim : '';
   document.getElementById('stk2-start').value = 0;
   document.getElementById('stk2-end').value = dim || '';
   document.getElementById('stk2-end').placeholder = dim || 'all';
@@ -192,8 +192,8 @@ function onStk2Change() {
 
 function scanPath() {
   var tp = document.getElementById('tp').value.trim();
-  if (!tp) { document.getElementById('scan-msg').textContent = '请先输入路径'; return; }
-  document.getElementById('scan-msg').textContent = '扫描中…';
+  if (!tp) { document.getElementById('scan-msg').textContent = 'Please enter a path first'; return; }
+  document.getElementById('scan-msg').textContent = 'Scanning...';
   document.getElementById('scan-msg').className = '';
   fetch('/api/scan', {
     method: 'POST',
@@ -231,10 +231,10 @@ function scanPath() {
         }
         onStk2Change();
       }
-      document.getElementById('scan-msg').textContent = '找到 ' + d.cameras.length + ' 个 camera';
+      document.getElementById('scan-msg').textContent = 'Found ' + d.cameras.length + ' camera(s)';
       document.getElementById('scan-msg').className = 'ok';
     } else {
-      document.getElementById('scan-msg').textContent = d.error || '未找到 camera';
+      document.getElementById('scan-msg').textContent = d.error || 'No cameras found';
       document.getElementById('scan-msg').className = 'err';
     }
   });
@@ -245,12 +245,12 @@ function go() {
   var dn = document.getElementById('dn').value.trim();
   var cn = document.getElementById('cn').value;
   var yamlFilename = document.getElementById('yaml-sel').value;
-  if (!tp) { document.getElementById('msg').textContent = '请填写数据集路径'; document.getElementById('msg').className = 'err'; return; }
-  if (!cn) { document.getElementById('msg').textContent = '请先扫描路径并选择 camera'; document.getElementById('msg').className = 'err'; return; }
+  if (!tp) { document.getElementById('msg').textContent = 'Please enter dataset path'; document.getElementById('msg').className = 'err'; return; }
+  if (!cn) { document.getElementById('msg').textContent = 'Please scan path and select a camera'; document.getElementById('msg').className = 'err'; return; }
   if (!dn) dn = tp.split('/').filter(Boolean).slice(-2, -1)[0] || 'unknown';
 
   document.getElementById('go').disabled = true;
-  document.getElementById('go').textContent = '加载中…';
+  document.getElementById('go').textContent = 'Loading...';
 
   var payload = {
     task_path: tp,
@@ -286,29 +286,29 @@ function go() {
     if (d.ok) {
       document.body.innerHTML =
         '<div style="max-width:600px;margin:3rem auto;text-align:center;font-family:system-ui">' +
-        '<h2>模型加载中</h2>' +
-        '<p id="ls" style="font-size:16px;color:#334">准备中…</p>' +
+        '<h2>Loading Models</h2>' +
+        '<p id="ls" style="font-size:16px;color:#334">Preparing...</p>' +
         '<div style="background:#eee;border-radius:8px;height:8px;margin:16px 0">' +
         '<div id="lb" style="background:#06f;height:100%;border-radius:8px;width:0%;transition:width 0.3s"></div></div>' +
         '<p id="ld" style="font-size:13px;color:#999"></p></div>';
       var lt = setInterval(function() {
         fetch('/api/loading_status').then(function(r) { return r.json(); }).then(function(s) {
-          document.getElementById('ls').textContent = s.message || '加载中…';
+          document.getElementById('ls').textContent = s.message || 'Loading...';
           if (s.progress !== undefined) document.getElementById('lb').style.width = s.progress + '%';
           if (s.detail) document.getElementById('ld').textContent = s.detail;
           if (s.done) {
             clearInterval(lt);
-            document.getElementById('ls').textContent = '加载完成！正在跳转…';
+            document.getElementById('ls').textContent = 'Done! Redirecting...';
             document.getElementById('lb').style.width = '100%';
             setTimeout(function(){ window.location.href = '/annotate'; }, 500);
           }
         });
       }, 500);
     } else {
-      document.getElementById('msg').textContent = d.error || '加载失败';
+      document.getElementById('msg').textContent = d.error || 'Loading failed';
       document.getElementById('msg').className = 'err';
       document.getElementById('go').disabled = false;
-      document.getElementById('go').textContent = '加载数据集';
+      document.getElementById('go').textContent = 'Load Dataset';
     }
   });
 }

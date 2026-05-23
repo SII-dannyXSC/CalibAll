@@ -62,9 +62,9 @@ def config_submit():
     d = request.get_json(force=True)
     tp = Path(d.get("task_path", ""))
     if not tp.is_dir():
-        return jsonify({"ok": False, "error": f"路径不存在: {tp}"})
+        return jsonify({"ok": False, "error": f"Path not found: {tp}"})
     if not (tp / "data").is_dir() and not (tp / "meta").is_dir() and not (tp / "videos").is_dir():
-        return jsonify({"ok": False, "error": "不是合法的 LeRobot 数据集"})
+        return jsonify({"ok": False, "error": "Not a valid LeRobot dataset"})
 
     state: SharedState = current_app.config["shared_state"]
     state.set("config_result", d)
@@ -77,6 +77,6 @@ def loading_status():
     """Poll loading progress."""
     state: SharedState = current_app.config["shared_state"]
     status = state.get("loading_status", {
-        "message": "准备中…", "progress": 0, "done": False
+        "message": "Preparing...", "progress": 0, "done": False
     })
     return jsonify(status)
