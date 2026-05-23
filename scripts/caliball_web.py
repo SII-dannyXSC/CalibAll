@@ -25,19 +25,18 @@ import numpy as np
 from PIL import Image
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 _sam3_root = _PROJECT_ROOT / "third_party" / "sam3"
 if _sam3_root.is_dir() and str(_sam3_root) not in sys.path:
     sys.path.insert(0, str(_sam3_root))
 
-from src.caliball.web.app import create_app, run_app
-from src.caliball.web.state import SharedState
-from src.caliball.web.services.image_utils import image_to_data_url, image_to_thumb_url
-from src.caliball.web.services.sam_service import SamService
-from src.caliball.pipeline.extrinsic_pipeline import ExtrinsicPipeline
-from src.caliball.pipeline.result_saver import save_masks, save_tracking_point_vis, save_config
-from src.caliball.utils.frame_utils import ensure_dir, save_video_frames, exported_frames_complete, overlay_mask
+from caliball.web.app import create_app, run_app
+from caliball.web.state import SharedState
+from caliball.web.services.image_utils import image_to_data_url, image_to_thumb_url
+from caliball.web.services.sam_service import SamService
+from caliball.pipeline.extrinsic_pipeline import ExtrinsicPipeline
+from caliball.pipeline.result_saver import save_masks, save_tracking_point_vis, save_config
+from caliball.utils.image import ensure_dir, save_video_frames, exported_frames_complete, overlay_mask
+from caliball.robots import build_robot
 
 
 def parse_args():
@@ -79,9 +78,9 @@ def _overlay_vis(img, msk, pts, labs):
 
 def _load_dataset(task_path, camera_name, state_key, episode_idx, strike):
     """Load dataset and return video, joint_angles."""
-    from src.caliball.dataset.lerobot_dataset import LeRobotDataset
+    from caliball.dataset.lerobot_dataset import LeRobotDataset
 
-    dataset = LeRobotDataset(task_path, state_key=state_key, episodes=[episode_idx])
+    dataset = LeRobotDataset(task_path, state_keys=state_key, episodes=[episode_idx])
     episode = dataset[0]  # episodes=[episode_idx] 后索引变为 0
     video = episode["videos"][camera_name]
     joint_angles = episode["states"]
@@ -96,8 +95,11 @@ def _load_dataset(task_path, camera_name, state_key, episode_idx, strike):
 def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None):
     """Load CoarseInit, Refinement, SAM3 models."""
     from omegaconf import OmegaConf
-    from src.caliball.coarse_init import CoarseInit
-    from src.caliball.refinement import Refinement
+    from caliball.pipeline import CoarseInit, Refinement
+    from caliball.algorithms.recognizer import Recognizer, build_feature_extractor
+    from caliball.algorithms.tracker import build_tracker
+    from caliball.algorithms.pose_estimator import solve_pnp
+    from caliball.algorithms.mask_extractor import Sam3Extractor
     from sam3.model_builder import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
 
@@ -109,12 +111,19 @@ def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None
     model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
     model_config.robot_type = robot_type
 
-    _up("加载 CoarseInit（DINOv2 + CoTracker）…", 20)
-    coarse_init = CoarseInit(config=model_config)
+    _up("Loading CoarseInit (DINOv2 + CoTracker)...", 20)
+    robot = build_robot(robot_type)
+    recognizer = Recognizer(build_feature_extractor(model_config))
+    tracker = build_tracker(model_config)
+    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp)
     coarse_init.to(device)
 
-    _up("加载 Refinement…", 50)
-    refinement = Refinement(config=model_config)
+    _up("Loading Refinement...", 50)
+    mask_extractor = Sam3Extractor(
+        bpe_path=str(_PROJECT_ROOT / sam_bpe_path if not Path(sam_bpe_path).is_absolute() else sam_bpe_path),
+        ckpt_path=str(_PROJECT_ROOT / sam_ckpt_path if not Path(sam_ckpt_path).is_absolute() else sam_ckpt_path),
+    )
+    refinement = Refinement(robot, mask_extractor, robot.MESH_PATHS, device=device)
 
     bpe = _PROJECT_ROOT / sam_bpe_path if not Path(sam_bpe_path).is_absolute() else Path(sam_bpe_path)
     ckpt = _PROJECT_ROOT / sam_ckpt_path if not Path(sam_ckpt_path).is_absolute() else Path(sam_ckpt_path)
@@ -163,17 +172,22 @@ def _run_from_config(args, result_dir, manual_label_dir):
 
     # Load models (no SAM needed)
     from omegaconf import OmegaConf
-    from src.caliball.coarse_init import CoarseInit
-    from src.caliball.refinement import Refinement
+    from caliball.pipeline import CoarseInit, Refinement
+    from caliball.algorithms.recognizer import Recognizer, build_feature_extractor
+    from caliball.algorithms.tracker import build_tracker
+    from caliball.algorithms.pose_estimator import solve_pnp
 
     model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
     model_config.robot_type = robot_type
 
-    print("[loading] CoarseInit…")
-    coarse_init = CoarseInit(config=model_config)
+    print("[loading] CoarseInit...")
+    robot = build_robot(robot_type)
+    recognizer = Recognizer(build_feature_extractor(model_config))
+    tracker = build_tracker(model_config)
+    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp)
     coarse_init.to(args.device)
-    print("[loading] Refinement…")
-    refinement = Refinement(config=model_config)
+    print("[loading] Refinement...")
+    refinement = Refinement(robot, None, robot.MESH_PATHS, device=args.device)
 
     pipeline = ExtrinsicPipeline(
         coarse_init=coarse_init, refinement=refinement,
@@ -223,21 +237,14 @@ def main():
         _run_from_config(args, result_dir, manual_label_dir)
         return
 
-    # ── Gather robot types (only arm types for extrinsic calibration) ──
-    # Composite configs have 'defaults' with arm+gripper; skip those
-    import yaml as _yaml
-    _robot_types = []
-    for _rp in sorted((_PROJECT_ROOT / "src" / "caliball" / "config" / "robot").glob("*.yaml")):
-        try:
-            _rc = _yaml.safe_load(_rp.read_text())
-            # 跳过 composite（defaults 中包含 arm + gripper 的组合配置）
-            defaults = _rc.get("defaults", [])
-            has_arm = any(isinstance(d, str) and "arm/" in d for d in defaults)
-            has_gripper = any(isinstance(d, str) and "gripper/" in d for d in defaults)
-            if not (has_arm and has_gripper):
-                _robot_types.append(_rp.stem)
-        except Exception:
-            pass
+    # ── Gather robot types from registry (exclude composite arm+gripper) ──
+    from caliball.robots import list_robots as _list_robots
+    from caliball.robots._registry import get_robot_cls as _get_cls
+    from caliball.robots._composite import ArmGripperCompositeTF as _CompTF
+    _robot_types = [
+        rt for rt in _list_robots()
+        if not issubclass(_get_cls(rt), _CompTF)
+    ]
 
     # ── Setup Flask (config page first) ──
     shared_state = SharedState()
@@ -296,7 +303,7 @@ def main():
         strike = int(web_cfg.get("strike", 4))
         dataset_name = web_cfg.get("dataset_name") or Path(task_path).parent.name
         task_name = Path(task_path).name
-        print(f"配置: task_path={task_path}, camera={camera_name}, state_key={state_key}[{state_key_start}:{state_key_end}]" +
+        print(f"配置: task_path={task_path}, camera={camera_name}, state_keys={state_key}[{state_key_start}:{state_key_end}]" +
               (f", state_key_2={state_key_2}[{state_key_2_start}:{state_key_2_end}]" if is_dual_arm else ""))
 
         # ── Load dataset ──
@@ -357,9 +364,10 @@ def main():
             models_loaded = True
         else:
             if robot_type != model_config.robot_type:
-                _update_loading("更新机型 FK 模型…", 50)
+                _update_loading("Updating FK model...", 50)
                 model_config.robot_type = robot_type
-                pipeline.update_robot(model_config)
+                new_robot = build_robot(robot_type)
+                pipeline.update_robot(new_robot)
             pipeline.reset_intrinsic()
 
         # ── Prepare annotate page ──
@@ -514,7 +522,8 @@ def main():
                 if sel_robot != robot_type:
                     robot_type = sel_robot
                     model_config.robot_type = sel_robot
-                    pipeline.update_robot(model_config)
+                    new_robot = build_robot(sel_robot)
+                    pipeline.update_robot(new_robot)
 
                 pipe_save = ensure_dir(result_dir / task_name / f"ep_{episode_idx:06d}" / "pipeline")
 

@@ -27,28 +27,22 @@ import argparse
 from dataclasses import asdict
 import json
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
-from src.caliball.config import (
+from caliball.config import (
     compose_job_config_from_path,
     instantiate_dataset,
     instantiate_tf,
 )
-from src.caliball.config.camera_intrinsic_extrinsic import get_intrinsic_extrinsic
-from src.caliball.dataset.lerobot_writer import ALIGN_COLS, LeRobotDatasetWriter
-from src.caliball.label import Labeler
-from src.caliball.pipeline.label_data import LabelData
-from src.caliball.utils.mesh_loader import load_meshes
-from src.caliball.utils.nvdiffrast_renderer import NVDiffrastRenderer
+from caliball.config.camera_intrinsic_extrinsic import get_intrinsic_extrinsic
+from caliball.dataset.lerobot_writer import ALIGN_COLS, LeRobotDatasetWriter
+from caliball.labeling import LabelData, LabelOrchestrator, MaskRenderer, PoseCalculator
+from caliball.utils.mesh_loader import load_meshes
+from caliball.rendering.nvdiffrast_renderer import NVDiffrastRenderer
 
 
 def parse_args():
@@ -138,8 +132,6 @@ def main():
     else:
         vertices_list, faces_list = [], []
 
-    labeler = Labeler(config=None)
-
     # Init writer (lerobot mode)
     writer = None
     if args.format == "lerobot":
@@ -208,12 +200,13 @@ def main():
             renderer = (None if skip_mask
                         else NVDiffrastRenderer([cam_H, cam_W], device=device))
 
-            cam_label = labeler.label_episode(
+            pose_calc = PoseCalculator(intrinsic, extrinsic)
+            mask_rend = MaskRenderer(renderer, intrinsic, extrinsic)
+            orchestrator = LabelOrchestrator(pose_calc, mask_rend)
+
+            cam_label = orchestrator.label_episode(
                 joint_angles_list=joint_angles,
-                intrinsic=intrinsic,
-                extrinsic=extrinsic,
                 tf_model=tf_model,
-                renderer=renderer,
                 vertices_list=vertices_list,
                 faces_list=faces_list,
                 device=device,

@@ -33,12 +33,8 @@ from typing import Dict, List, Optional
 import cv2
 import numpy as np
 
-_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
-
-from src.caliball.utils.video_io import FfmpegVideoReader, FfmpegVideoWriter
-from src.caliball.utils.visualization import (
+from caliball.utils.video_io import FfmpegVideoReader, FfmpegVideoWriter
+from caliball.utils.visualization import (
     ArmRenderData,
     BboxItem,
     MaskItem,

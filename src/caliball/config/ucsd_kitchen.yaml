@@ -1,31 +1,18 @@
 # UCSD Kitchen：xArm7 + 原厂夹爪（OXE / RLDS）
 # observation.state (21,)：7 关节角 + 7 速度 + 7 力矩；action (8,)：EEF 6 + 夹爪 + terminate
-defaults:
-  - robot: xarm7_with_gripper
-  - _self_
-
 dataset_name: ucsd_kitchen_dataset_converted_externally_to_rlds
+robot_type: xarm7_xarmgripper
 base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data
 
 dataset:
-  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
   repo_id: ${base_path}/${dataset_name}
-  state_keys: observation.state
-  action_key: action
-  state_fn:
-    _target_: src.caliball.dataset.calib_lerobot_dataset.StateProcessor
-    arm_joint_stop: 7
-    gripper_mode: from_action
-    gripper_action_idx: 6
-    gripper_open_val: 0.0
-    gripper_closed_val: 0.85   # XArm7WithGripperTF.GRIPPER_CLOSED
-    gripper_threshold: 0.5
-    gripper_invert: false
+  state_keys:
+    - observation.state
+    - action
+  arm_joint_stop: 7
 
 tf:
-  _target_: src.caliball.robot.composite.xarm.XArm7WithGripperTF
-  full_chain_names: ${robot.names}
-  gripper_eef_name: ${robot.gripper.eef_name}
   gripper_mount_yaw_deg: 0.0
 
 label:

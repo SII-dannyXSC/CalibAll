@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, render_template, request, jsonify, current_app
-from src.caliball.web.state import SharedState
+from caliball.web.state import SharedState
 
 config_bp = Blueprint("config", __name__)
 
@@ -29,7 +29,7 @@ def config_page():
 @config_bp.route("/api/scan", methods=["POST"])
 def scan_path():
     """Scan a dataset path for cameras and state_keys."""
-    from src.caliball.web.services.scan_service import scan_cameras
+    from caliball.web.services.scan_service import scan_cameras
 
     d = request.get_json(force=True)
     task_path = d.get("task_path", "")

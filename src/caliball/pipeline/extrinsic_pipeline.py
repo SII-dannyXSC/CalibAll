@@ -26,10 +26,17 @@ class ExtrinsicPipeline:
         self._device = device
         self._max_steps = max_steps
 
-    def update_robot(self, config):
-        """Update FK models when robot type changes."""
-        self._coarse.update_robot(config)
-        self._refinement.update_robot(config)
+    def update_robot(self, robot, mesh_paths=None):
+        """Update FK models when robot type changes.
+
+        Args:
+            robot: new robot instance (from ``build_robot``)
+            mesh_paths: mesh file paths for the new robot (defaults to ``robot.MESH_PATHS``)
+        """
+        if mesh_paths is None:
+            mesh_paths = robot.MESH_PATHS
+        self._coarse.update_robot(robot)
+        self._refinement.update_robot(robot, mesh_paths)
 
     def reset_intrinsic(self):
         """Reset cached intrinsic (for new camera/resolution)."""
@@ -171,8 +178,8 @@ class ExtrinsicPipeline:
     def _render_video(self, clip, joint_angles, tsfm, K, save_dir, report_fn) -> Path:
         """Render annotation overlay video."""
         import torch as _torch
-        from src.caliball.pipeline.rendering_optimizer import RBSolver
-        from src.caliball.utils.image import add_mask as _add_mask
+        from caliball.algorithms.rendering_optimizer import RBSolver
+        from caliball.utils.image import add_mask as _add_mask
 
         H, W = clip.shape[1:3]
         vis_solver = RBSolver(self._refinement.mesh_paths, H, W, tsfm, device=self._device)

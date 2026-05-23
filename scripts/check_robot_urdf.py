@@ -13,19 +13,14 @@ check_robot_urdf.py
         --joints 0 0 0 0 0 0 0 0.04 0 0 0 0 0 0 0 0.04
 """
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from src.caliball.config import compose_job_config_from_path, instantiate_tf
-from src.caliball.robot.arm_gripper_composite import ArmGripperCompositeTF
-from src.caliball.robot.dual_arm.dual_arm_base import DualArmTF
-from src.caliball.utils.mesh_loader import _get_mesh_paths
+from caliball.config import compose_job_config_from_path, instantiate_tf
+from caliball.robots._composite import ArmGripperCompositeTF
+from caliball.robots._dual_arm import DualArmTF
+from caliball.utils.mesh_loader import _get_mesh_paths
 
 
 def default_state(tf) -> np.ndarray:

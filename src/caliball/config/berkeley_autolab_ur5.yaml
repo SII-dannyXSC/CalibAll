@@ -1,30 +1,14 @@
-defaults:
-  - robot: ur5e_robotiq
-  - _self_
-
 dataset_name: berkeley_autolab_ur5
+robot_type: ur5e_robotiq
 base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data
 
 dataset:
-  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
   repo_id: ${base_path}/${dataset_name}
   state_keys: observation.state
-  action_key: action
-  state_fn:
-    _target_: src.caliball.dataset.calib_lerobot_dataset.StateProcessor
-    arm_joint_stop: 6
-    gripper_mode: from_state_idx
-    gripper_state_idx: 13
-    gripper_open_val: 0.0
-    gripper_closed_val: 0.8
-    gripper_threshold: 0.5
+  arm_joint_stop: 6
 
 tf:
-  _target_: src.caliball.robot.composite.ur5e_robotiq.Ur5eRobotiqTF
-  arm_names: ${robot.arm.names}
-  gripper_names: ${robot.gripper.names}
-  arm_eef_name: ${robot.arm.eef_name}
-  gripper_eef_name: ${robot.gripper.eef_name}
   gripper_mount_yaw_deg: 90.0
 
 # scripts/label_from_config.py（JSON）或 label_to_lerobot_from_config.py（parquet）读取

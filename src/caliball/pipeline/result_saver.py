@@ -23,7 +23,7 @@ def save_masks(
     """Save mask arrays and overlay images. Returns list of mask save paths."""
     # overlay function
     if overlay_fn is None:
-        from src.caliball.utils.frame_utils import overlay_mask
+        from caliball.utils.image import overlay_mask
         overlay_fn = overlay_mask
 
     mask_output_dir = result_dir / "masks"

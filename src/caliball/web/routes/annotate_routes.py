@@ -11,8 +11,8 @@ import numpy as np
 from flask import Blueprint, render_template, request, jsonify, current_app, send_file
 from PIL import Image
 
-from src.caliball.web.state import SharedState
-from src.caliball.web.services.image_utils import image_to_data_url, image_to_thumb_url
+from caliball.web.state import SharedState
+from caliball.web.services.image_utils import image_to_data_url, image_to_thumb_url
 
 annotate_bp = Blueprint("annotate", __name__)
 

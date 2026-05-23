@@ -33,9 +33,12 @@ import numpy as np
 from omegaconf import OmegaConf
 from PIL import Image
 
-from src.caliball.coarse_init import CoarseInit
-from src.caliball.dataset.lerobot_dataset import LeRobotDataset
-from src.caliball.refinement import Refinement
+from caliball.pipeline import CoarseInit, Refinement
+from caliball.algorithms.recognizer import Recognizer, build_feature_extractor
+from caliball.algorithms.tracker import build_tracker
+from caliball.algorithms.pose_estimator import solve_pnp
+from caliball.dataset.lerobot_dataset import LeRobotDataset
+from caliball.robots import build_robot
 
 
 def parse_args():
@@ -119,7 +122,7 @@ def main():
     model_config.robot_type = args.robot_type
 
     # --- Load dataset ---
-    dataset = LeRobotDataset(args.dataset_path, state_key=args.state_key)
+    dataset = LeRobotDataset(args.dataset_path, state_keys=args.state_key)
     data = dataset[args.episode]
 
     # --- Extract video and joint angles ---
@@ -170,7 +173,10 @@ def main():
         img_pil = Image.open(args.ref_image).convert("RGB")
         p = tuple(args.ref_point)
 
-        coarse_init_pipe = CoarseInit(config=model_config)
+        robot = build_robot(args.robot_type)
+        recognizer = Recognizer(build_feature_extractor(model_config))
+        tracker = build_tracker(model_config)
+        coarse_init_pipe = CoarseInit(robot, recognizer, tracker, solve_pnp)
         coarse_init_pipe.to("cuda")
         coarse_init_pipe._init_recognizer(img_pil, p)
         coarse_init_pipe._init_intrinsic()
@@ -187,7 +193,11 @@ def main():
     print(f"intrinsic=\n{intrinsic}")
 
     # --- Refinement ---
-    refinement_pipe = Refinement(config=model_config)
+    if not args.skip_coarse:
+        ref_robot = robot
+    else:
+        ref_robot = build_robot(args.robot_type)
+    refinement_pipe = Refinement(ref_robot, None, ref_robot.MESH_PATHS)
 
     refine_kwargs = dict(
         video=video,

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Union
 
@@ -7,42 +6,6 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 
 CUR_DIR = Path(__file__).resolve().parent
-
-
-def _load_composite_config(arm_yaml: str, gripper_yaml: str) -> DictConfig:
-    """加载 arm + gripper 子 yaml 并合并为 {arm: ..., gripper: ...}。
-    用于 franka_robotiq / ur5e_robotiq / franka_panda_hand 等使用 Hydra defaults 的配置。
-    """
-    robot_dir = os.path.join(CUR_DIR, "robot")
-    arm_cfg     = OmegaConf.load(os.path.join(robot_dir, arm_yaml))
-    gripper_cfg = OmegaConf.load(os.path.join(robot_dir, gripper_yaml))
-    return OmegaConf.create({"arm": arm_cfg, "gripper": gripper_cfg})
-
-
-def build_robot_config(config):
-    robot_type = config.robot_type
-    if robot_type == "franka":
-        return OmegaConf.load(os.path.join(CUR_DIR, "robot/franka.yaml"))
-    elif robot_type == "ur5e":
-        return OmegaConf.load(os.path.join(CUR_DIR, "robot/ur5e.yaml"))
-    elif robot_type in ("aloha", "aloha_cobot_magic"):
-        return OmegaConf.load(os.path.join(CUR_DIR, "robot/aloha.yaml"))
-    elif robot_type == "arx5_robotwin":
-        return OmegaConf.load(os.path.join(CUR_DIR, "robot/arx5_robotwin.yaml"))
-    elif robot_type == "franka_robotiq":
-        return _load_composite_config("arm/franka_panda.yaml", "gripper/robotiq.yaml")
-    elif robot_type == "ur5e_robotiq":
-        return _load_composite_config("arm/ur5e.yaml", "gripper/robotiq.yaml")
-    elif robot_type == "franka_panda_hand":
-        return _load_composite_config("arm/fr3.yaml", "gripper/panda_hand.yaml")
-    elif robot_type == "xarm7_with_gripper":
-        return OmegaConf.load(os.path.join(CUR_DIR, "robot/xarm7_with_gripper.yaml"))
-    else:
-        # 通用 fallback：尝试加载 robot/{robot_type}.yaml
-        fallback = os.path.join(CUR_DIR, "robot", f"{robot_type}.yaml")
-        if os.path.isfile(fallback):
-            return OmegaConf.load(fallback)
-        raise ValueError(f"不支持的 robot_type: {robot_type}（无匹配配置文件）")
 
 
 def compose_job_config(
@@ -77,7 +40,19 @@ def compose_job_config_from_path(
 
 
 def instantiate_tf(cfg: DictConfig):
-    """对任务配置中的 ``tf`` 节点做 ``hydra.utils.instantiate``。"""
+    """Construct robot TF from task config.
+
+    If *cfg* carries a ``robot_type`` attribute, the new registry-based
+    ``caliball.robots.build_robot`` is used.  Otherwise falls back to
+    ``hydra.utils.instantiate(cfg.tf)`` for backward compatibility.
+    """
+    if hasattr(cfg, 'robot_type'):
+        from caliball.robots import build_robot
+        tf_kwargs = {}
+        if "tf" in cfg and cfg.tf is not None:
+            tf_kwargs = {k: v for k, v in cfg.tf.items() if k != "_target_"}
+        return build_robot(cfg.robot_type, **tf_kwargs)
+    # Fallback to hydra instantiate for backward compat
     return instantiate(cfg.tf)
 
 

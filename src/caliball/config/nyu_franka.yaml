@@ -1,27 +1,14 @@
-defaults:
-  - robot: franka_panda_hand
-  - _self_
-
 dataset_name: nyu_franka_play_dataset_converted_externally_to_rlds
+robot_type: franka_panda_hand
 base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data
 
 dataset:
-  _target_: src.caliball.dataset.calib_lerobot_dataset.CalibLeRobotDataset
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
   repo_id: ${base_path}/${dataset_name}
   state_keys: observation.state
-  action_key: action
-  state_fn:
-    _target_: src.caliball.dataset.calib_lerobot_dataset.StateProcessor
-    arm_joint_stop: 7
-    gripper_mode: constant
-    default_gripper_q: 0.0
+  arm_joint_stop: 7
 
 tf:
-  _target_: src.caliball.robot.composite.franka_hand.FrankaPandaHandTF
-  arm_names: ${robot.arm.names}
-  gripper_names: ${robot.gripper.names}
-  arm_eef_name: ${robot.arm.eef_name}
-  gripper_eef_name: ${robot.gripper.eef_name}
   gripper_mount_yaw_deg: 0.0
 
 label:

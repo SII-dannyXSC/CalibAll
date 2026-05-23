@@ -6,7 +6,7 @@ import threading
 
 from flask import Blueprint, jsonify, current_app
 
-from src.caliball.web.state import SharedState
+from caliball.web.state import SharedState
 
 pipeline_bp = Blueprint("pipeline", __name__)
 

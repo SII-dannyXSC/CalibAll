@@ -9,7 +9,7 @@ from typing import Optional
 
 from flask import Flask
 
-from src.caliball.web.state import SharedState
+from caliball.web.state import SharedState
 
 
 def create_app(
@@ -35,9 +35,9 @@ def create_app(
     app.config["shared_state"] = shared_state
 
     # Register blueprints
-    from src.caliball.web.routes.config_routes import config_bp
-    from src.caliball.web.routes.annotate_routes import annotate_bp
-    from src.caliball.web.routes.pipeline_routes import pipeline_bp
+    from caliball.web.routes.config_routes import config_bp
+    from caliball.web.routes.annotate_routes import annotate_bp
+    from caliball.web.routes.pipeline_routes import pipeline_bp
 
     app.register_blueprint(config_bp)
     app.register_blueprint(annotate_bp)
