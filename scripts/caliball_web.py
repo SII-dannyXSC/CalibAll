@@ -37,6 +37,7 @@ from caliball.pipeline.extrinsic_pipeline import ExtrinsicPipeline
 from caliball.pipeline.result_saver import save_masks, save_tracking_point_vis, save_config
 from caliball.utils.image import ensure_dir, save_video_frames, exported_frames_complete, overlay_mask
 from caliball.robots import build_robot
+from caliball.web.services.dataset_builder import DatasetBuilder
 
 
 def parse_args():
@@ -74,22 +75,6 @@ def _overlay_vis(img, msk, pts, labs):
         cv2.circle(v, (int(px), int(py)), 6, c, -1)
         cv2.circle(v, (int(px), int(py)), 6, (255, 255, 255), 1)
     return image_to_data_url(v)
-
-
-def _load_dataset(task_path, camera_name, state_key, episode_idx, strike):
-    """Load dataset and return video, joint_angles."""
-    from caliball.dataset.lerobot_dataset import LeRobotDataset
-
-    dataset = LeRobotDataset(task_path, state_keys=state_key, episodes=[episode_idx])
-    episode = dataset[0]  # episodes=[episode_idx] 后索引变为 0
-    video = episode["videos"][camera_name]
-    joint_angles = episode["states"]
-
-    video = video[::strike]
-    joint_angles = joint_angles[::strike]
-
-    print(f"video shape = {video.shape}, joint shape = {joint_angles.shape}")
-    return video, joint_angles
 
 
 def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None):
@@ -145,7 +130,6 @@ def _run_from_config(args, result_dir, manual_label_dir):
 
     task_path = cfg["task_path"]
     camera_name = cfg["camera_name"]
-    state_key = cfg.get("state_key", "observation.states.joint_position")
     robot_type = cfg.get("robot_type", "ur5e")
     episode_idx = int(cfg.get("episode_idx", 0))
     strike = int(cfg.get("strike", 4))
@@ -167,8 +151,28 @@ def _run_from_config(args, result_dir, manual_label_dir):
     print(f"[config] task={task_path}, camera={camera_name}, robot={robot_type}")
     print(f"[config] tracking={tracking_point}, masks={len(masks)}")
 
-    # Load dataset
-    video, joint_angles = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
+    # Load dataset — new YAML-based or legacy state_key fallback
+    yaml_filename = cfg.get("yaml_filename")
+    if yaml_filename:
+        overrides = cfg.get("overrides")
+        dataset, ds_info = DatasetBuilder.build(
+            yaml_filename, task_path,
+            episode_idx=episode_idx,
+            overrides=overrides,
+        )
+        episode = dataset[0]
+        video = episode["videos"][camera_name]
+        joint_angles = episode["states"]
+        video = video[::strike]
+        joint_angles = joint_angles[::strike]
+    else:
+        # Legacy fallback: old config.json with state_key
+        from caliball.dataset.lerobot_dataset import LeRobotDataset
+        state_key = cfg.get("state_key", "observation.state")
+        ds = LeRobotDataset(task_path, state_keys=state_key, episodes=[episode_idx])
+        episode = ds[0]
+        video = episode["videos"][camera_name][::strike]
+        joint_angles = episode["states"][::strike]
 
     # Load models (no SAM needed)
     from omegaconf import OmegaConf
@@ -221,7 +225,7 @@ def _run_from_config(args, result_dir, manual_label_dir):
         "start_idx": start_idx, "end_idx": end_idx,
         "mask_frame_idxs": mask_frame_idxs,
         "tracking_point": list(tracking_point),
-        "state_key": state_key,
+        **({"yaml_filename": yaml_filename, "overrides": cfg.get("overrides")} if yaml_filename else {"state_key": cfg.get("state_key", "observation.state")}),
         **{k: str(v) for k, v in output.items() if k != "loss_dict"},
     }, manual_label_dir / f"{prefix}.config.json")
     print("Done.")
@@ -255,9 +259,7 @@ def main():
     app.config["cmd_q"] = cmd_q
     app.config["pipeline_stop_event"] = pipeline_stop
     app.config["config_context"] = {
-        "dataset_configs": [],
         "robot_types": _robot_types,
-        "dual_arm_robots": ["aloha", "arx5_robotwin"],
         "default_robot_type": "ur5e",
         "default_task_path": "",
         "default_dataset_name": "",
@@ -289,42 +291,31 @@ def main():
         web_cfg = shared_state.get("config_result")
         task_path = web_cfg["task_path"]
         camera_name = web_cfg["camera_name"]
-        state_key = web_cfg.get("state_key") or "observation.states.joint_position"
-        state_key_start = int(web_cfg.get("state_key_start") or 0)
-        state_key_end = web_cfg.get("state_key_end")
-        state_key_end = int(state_key_end) if state_key_end else None
-        is_dual_arm = web_cfg.get("is_dual_arm", False)
-        state_key_2 = web_cfg.get("state_key_2")
-        state_key_2_start = int(web_cfg.get("state_key_2_start") or 0)
-        state_key_2_end = web_cfg.get("state_key_2_end")
-        state_key_2_end = int(state_key_2_end) if state_key_2_end else None
         robot_type = web_cfg.get("robot_type", "ur5e")
         episode_idx = int(web_cfg.get("episode_idx", 0))
         strike = int(web_cfg.get("strike", 4))
         dataset_name = web_cfg.get("dataset_name") or Path(task_path).parent.name
         task_name = Path(task_path).name
-        print(f"配置: task_path={task_path}, camera={camera_name}, state_keys={state_key}[{state_key_start}:{state_key_end}]" +
-              (f", state_key_2={state_key_2}[{state_key_2_start}:{state_key_2_end}]" if is_dual_arm else ""))
+        yaml_filename = web_cfg.get("yaml_filename", "default.yaml")
+        overrides = web_cfg.get("overrides")
 
-        # ── Load dataset ──
+        print(f"配置: task_path={task_path}, camera={camera_name}, yaml={yaml_filename}")
+
+        # ── Load dataset via DatasetBuilder ──
         _update_loading("加载数据集…", 5)
         try:
-            if is_dual_arm and state_key_2:
-                # 双臂: 分别加载左右臂关节并拼接
-                video, joint_left = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
-                _, joint_right = _load_dataset(task_path, camera_name, state_key_2, episode_idx, strike)
-                if state_key_start or state_key_end:
-                    joint_left = joint_left[:, state_key_start:state_key_end]
-                if state_key_2_start or state_key_2_end:
-                    joint_right = joint_right[:, state_key_2_start:state_key_2_end]
-                joint_angles = np.concatenate([joint_left, joint_right], axis=-1)
-                print(f"双臂 joint_angles: left={joint_left.shape[-1]}, right={joint_right.shape[-1]} → {joint_angles.shape}")
-            else:
-                video, joint_angles = _load_dataset(task_path, camera_name, state_key, episode_idx, strike)
-                # Slice joint dimensions
-                if state_key_start or state_key_end:
-                    joint_angles = joint_angles[:, state_key_start:state_key_end]
-                    print(f"joint_angles 截取 [{state_key_start}:{state_key_end}] → shape={joint_angles.shape}")
+            dataset, ds_info = DatasetBuilder.build(
+                yaml_filename, task_path,
+                episode_idx=episode_idx,
+                overrides=overrides,
+            )
+            episode = dataset[0]
+            video = episode["videos"][camera_name]
+            joint_angles = episode["states"]
+
+            video = video[::strike]
+            joint_angles = joint_angles[::strike]
+            print(f"video shape = {video.shape}, joint shape = {joint_angles.shape}")
         except Exception as e:
             _update_loading(f"数据集加载失败: {e}", 0)
             print(f"数据集加载失败: {e}")
@@ -406,7 +397,6 @@ def main():
             "has_pipeline": True,
             "initial_overlay": initial_overlay, "tracking_url": tracking_url,
             "robot_html": robot_html, "dataset_html": "",
-            "is_dual_arm": is_dual_arm,
         }
         shared_state.set("loading_status", {"message": "加载完成", "progress": 100, "done": True})
         print("[web] 标注页面已就绪")
@@ -594,7 +584,9 @@ def main():
                 "task_path": task_path, "task_name": task_name,
                 "dataset_name": dataset_name, "robot_type": robot_type,
                 "episode_idx": episode_idx, "camera_name": camera_name,
-                "strike": strike, "state_key": state_key,
+                "strike": strike,
+                "yaml_filename": yaml_filename,
+                "overrides": overrides,
                 "start_idx": result_val["start"], "end_idx": result_val["end"],
                 "mask_frame_idxs": result_val["mask_refs"],
                 "tracking_point": list(result_val["tracking_point"]),
