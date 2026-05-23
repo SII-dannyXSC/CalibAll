@@ -536,6 +536,19 @@ def main():
                                           tracking_img_idx=s - clip_start)
                     pipeline_output = output
                     def _fmt(m): return np.array2string(np.array(m), precision=6, suppress_small=True)
+
+                    # Generate calibration yaml immediately so download works
+                    import yaml as _yaml
+                    K = np.array(output["intrinsic"])
+                    T = np.array(output["extrinsic_refined"])
+                    calib_data = {"dataset": dataset_name, "cameras": {camera_name: {"intrinsic": K.tolist(), "extrinsic": T.tolist()}}}
+                    calib_filename = dataset_name.replace("/", "_").replace(".", "_") + ".yaml"
+                    calib_path = pipe_save / calib_filename
+                    calib_path.parent.mkdir(parents=True, exist_ok=True)
+                    with open(calib_path, "w") as f:
+                        _yaml.dump(calib_data, f, default_flow_style=None, allow_unicode=True)
+                    print(f"Calibration yaml 已保存: {calib_path}")
+
                     shared_state.update_pipeline(
                         stage="done", message="Pipeline 完成！",
                         video_path=output.get("anno_video_path"),
@@ -543,6 +556,7 @@ def main():
                         intrinsic_path=str(pipe_save / "intrinsic.npy"),
                         extrinsic_coarse_path=str(pipe_save / "extrinsic_coarse.npy"),
                         extrinsic_refined_path=str(pipe_save / "extrinsic_refined.npy"),
+                        calibration_path=str(calib_path),
                         intrinsic_str=_fmt(output["intrinsic"]),
                         extrinsic_coarse_str=_fmt(output["extrinsic_coarse"]),
                         extrinsic_refined_str=_fmt(output["extrinsic_refined"]),
@@ -593,19 +607,6 @@ def main():
                 "mask_save_paths": mask_save_paths,
             }, manual_label_dir / f"{prefix}.config.json")
             print(f"Config 已保存: manual_label/{prefix}.config.json")
-
-            import yaml
-            K = np.array(pipeline_output["intrinsic"])
-            T = np.array(pipeline_output["extrinsic_refined"])
-            calib_data = {"dataset": dataset_name, "cameras": {camera_name: {"intrinsic": K.tolist(), "extrinsic": T.tolist()}}}
-            calib_filename = dataset_name.replace("/", "_").replace(".", "_") + ".yaml"
-            calib_path = ep_result_dir / "pipeline" / calib_filename
-            calib_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(calib_path, "w") as f:
-                yaml.dump(calib_data, f, default_flow_style=None, allow_unicode=True)
-            print(f"Calibration yaml 已保存: {calib_path}")
-            # Update shared state so frontend can download
-            shared_state.update_pipeline(calibration_path=str(calib_path))
 
         # ── Reconfig or exit ──
         if reconfig_requested:
