@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from flask import Blueprint, render_template, request, jsonify, current_app
 from caliball.web.state import SharedState
+from caliball.web.services.dataset_builder import DatasetBuilder
 
 config_bp = Blueprint("config", __name__)
 
@@ -12,11 +13,11 @@ config_bp = Blueprint("config", __name__)
 def config_page():
     """Render the dataset configuration page."""
     ctx = current_app.config.get("config_context", {})
+    yaml_configs = DatasetBuilder.list_configs()
     return render_template(
         "config.html",
-        dataset_configs=ctx.get("dataset_configs", []),
+        yaml_configs=yaml_configs,
         robot_types=ctx.get("robot_types", []),
-        dual_arm_robots=ctx.get("dual_arm_robots", []),
         default_robot_type=ctx.get("default_robot_type", "ur5e"),
         default_task_path=ctx.get("default_task_path", ""),
         default_dataset_name=ctx.get("default_dataset_name", ""),
@@ -35,6 +36,22 @@ def scan_path():
     task_path = d.get("task_path", "")
     result = scan_cameras(task_path)
     return jsonify(result)
+
+
+@config_bp.route("/api/config/yaml_info", methods=["POST"])
+def yaml_info():
+    """Return parsed YAML config info for frontend rendering."""
+    d = request.get_json(force=True)
+    filename = d.get("filename", "")
+    if not filename:
+        return jsonify({"error": "filename is required"})
+    try:
+        info = DatasetBuilder.parse_config(filename)
+        return jsonify(info)
+    except FileNotFoundError:
+        return jsonify({"error": f"YAML not found: {filename}"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 
 @config_bp.route("/api/config/submit", methods=["POST"])
