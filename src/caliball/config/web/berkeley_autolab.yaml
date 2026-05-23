@@ -1,0 +1,9 @@
+# Berkeley Autolab UR5 固定配置
+name: Berkeley Autolab UR5
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  state_keys:
+    - observation.state
+  state_processor:
+    _target_: caliball.dataset.state_processors.SliceProcessor
+    stop: 6
