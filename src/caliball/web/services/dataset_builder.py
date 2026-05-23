@@ -194,15 +194,15 @@ class DatasetBuilder:
                 state_processor=processor,
             )
         else:
+            # 自定义 dataset：透传 YAML 中 dataset 下的所有参数（除 _target_ 和 state_processor）
             module_path, cls_name = ds_target.rsplit(".", 1)
             mod = importlib.import_module(module_path)
             cls = getattr(mod, cls_name)
-            dataset = cls(
-                repo_id=task_path,
-                episodes=[episode_idx],
-                state_keys=state_keys,
-                state_processor=processor,
-            )
+            ds_kwargs = {k: v for k, v in ds_cfg.items()
+                         if k not in ("_target_", "state_processor", "state_keys")}
+            ds_kwargs.setdefault("repo_id", task_path)
+            ds_kwargs.setdefault("episodes", [episode_idx])
+            dataset = cls(**ds_kwargs)
 
         info = {
             "yaml_filename": yaml_filename,
