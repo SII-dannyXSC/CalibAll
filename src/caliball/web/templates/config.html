@@ -18,6 +18,10 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
   cursor:pointer;background:#334;color:#fff;border:none;border-radius:6px}
 #msg{text-align:center;margin-top:8px;font-size:14px}
 .ok{color:#090}.err{color:#c00}
+.state-section{border:1px solid #ddd;border-radius:6px;padding:12px;margin:8px 0;background:#fafafa}
+.state-section.hidden{display:none}
+.yaml-fixed{padding:12px;background:#f0f4ff;border-radius:6px;margin:8px 0;font-size:14px;color:#446}
+.yaml-fixed.hidden{display:none}
 </style>
 </head>
 <body>
@@ -47,6 +51,59 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
   </div>
 </div>
 
+<!-- YAML 配置选择 -->
+<div class="f">
+  <label>数据集配置</label>
+  <select id="yaml-sel" onchange="onYamlChange()">
+    {% for yc in yaml_configs %}
+    <option value="{{ yc.filename }}">{{ yc.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<!-- 固定配置提示（不可配置时显示） -->
+<div id="yaml-fixed" class="yaml-fixed hidden"></div>
+
+<!-- state_key 配置区域（可配置时显示） -->
+<div id="state-section" class="state-section">
+  <div class="row">
+    <div class="f" style="flex:2">
+      <label id="stk-label">state_key (关节数据列)</label>
+      <select id="stk" onchange="onStkChange()"><option value="">请先扫描路径</option></select>
+    </div>
+    <div class="f" style="flex:0.5">
+      <label>start</label>
+      <input id="stk-start" type="number" value="0" min="0"/>
+    </div>
+    <div class="f" style="flex:0.5">
+      <label>end</label>
+      <input id="stk-end" type="number" value="" placeholder="all"/>
+    </div>
+    <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
+      <span id="stk-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
+    </div>
+  </div>
+
+  <!-- 双臂: 第二个 state_key（DualArmSliceProcessor 时显示） -->
+  <div id="dual-arm-row" class="row" style="display:none">
+    <div class="f" style="flex:2">
+      <label>state_key 2 (右臂关节)</label>
+      <select id="stk2" onchange="onStk2Change()"><option value="">请先扫描路径</option></select>
+    </div>
+    <div class="f" style="flex:0.5">
+      <label>start</label>
+      <input id="stk2-start" type="number" value="0" min="0"/>
+    </div>
+    <div class="f" style="flex:0.5">
+      <label>end</label>
+      <input id="stk2-end" type="number" value="" placeholder="all"/>
+    </div>
+    <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
+      <span id="stk2-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
+    </div>
+  </div>
+</div>
+
 <!-- robot-type / episode -->
 <div class="row">
   <div class="f">
@@ -63,44 +120,6 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
   </div>
 </div>
 
-<!-- state_key with dimension range -->
-<div class="row">
-  <div class="f" style="flex:2">
-    <label>state_key (关节数据列)</label>
-    <select id="stk" onchange="onStkChange()"><option value="">请先扫描路径</option></select>
-  </div>
-  <div class="f" style="flex:0.5">
-    <label>start</label>
-    <input id="stk-start" type="number" value="0" min="0"/>
-  </div>
-  <div class="f" style="flex:0.5">
-    <label>end</label>
-    <input id="stk-end" type="number" value="" placeholder="all"/>
-  </div>
-  <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
-    <span id="stk-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
-  </div>
-</div>
-
-<!-- 双臂: 第二个 state_key -->
-<div id="dual-arm-row" class="row" style="display:none">
-  <div class="f" style="flex:2">
-    <label>state_key 2 (右臂关节)</label>
-    <select id="stk2" onchange="onStk2Change()"><option value="">请先扫描路径</option></select>
-  </div>
-  <div class="f" style="flex:0.5">
-    <label>start</label>
-    <input id="stk2-start" type="number" value="0" min="0"/>
-  </div>
-  <div class="f" style="flex:0.5">
-    <label>end</label>
-    <input id="stk2-end" type="number" value="" placeholder="all"/>
-  </div>
-  <div class="f" style="flex:0.5;display:flex;align-items:flex-end">
-    <span id="stk2-dim" style="font-size:13px;color:#666;padding:8px 0"></span>
-  </div>
-</div>
-
 <!-- strike -->
 <div class="row">
   <div class="f">
@@ -113,18 +132,43 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
 <p id="msg"></p>
 
 <script>
-var DUAL_ARM_ROBOTS = {{ dual_arm_robots | tojson }};
-var isDualArm = false;
+var currentYamlInfo = null;
 
-function checkDualArm() {
-  var rt = document.getElementById('rt').value;
-  isDualArm = DUAL_ARM_ROBOTS.indexOf(rt) >= 0;
-  document.getElementById('dual-arm-row').style.display = isDualArm ? 'flex' : 'none';
-  // Update label
-  var stkLabel = document.querySelector('#stk').closest('.f').querySelector('label');
-  stkLabel.textContent = isDualArm ? 'state_key (左臂关节)' : 'state_key (关节数据列)';
+function onYamlChange() {
+  var filename = document.getElementById('yaml-sel').value;
+  if (!filename) return;
+  fetch('/api/config/yaml_info', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename: filename})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(info) {
+    currentYamlInfo = info;
+    var stateSection = document.getElementById('state-section');
+    var yamlFixed = document.getElementById('yaml-fixed');
+    var dualRow = document.getElementById('dual-arm-row');
+
+    if (info.configurable) {
+      stateSection.classList.remove('hidden');
+      yamlFixed.classList.add('hidden');
+      if (info.processor_type === 'DualArmSliceProcessor') {
+        dualRow.style.display = 'flex';
+        document.getElementById('stk-label').textContent = 'state_key (左臂关节)';
+      } else {
+        dualRow.style.display = 'none';
+        document.getElementById('stk-label').textContent = 'state_key (关节数据列)';
+      }
+    } else {
+      stateSection.classList.add('hidden');
+      yamlFixed.classList.remove('hidden');
+      yamlFixed.textContent = '使用 YAML 配置: ' + info.name +
+        (info.state_keys ? ' — state_keys: ' + info.state_keys.join(', ') : '') +
+        (info.processor_params && Object.keys(info.processor_params).length
+          ? ' — ' + JSON.stringify(info.processor_params) : '');
+    }
+  });
 }
-document.getElementById('rt').addEventListener('change', checkDualArm);
 
 function onStkChange() {
   var sel = document.getElementById('stk');
@@ -168,7 +212,6 @@ function scanPath() {
       });
       if (d.dataset_name) document.getElementById('dn').value = d.dataset_name;
       if (d.state_keys && d.state_keys.length > 0) {
-        // Populate both state_key dropdowns
         ['stk', 'stk2'].forEach(function(id) {
           var sel = document.getElementById(id);
           sel.innerHTML = '';
@@ -180,7 +223,6 @@ function scanPath() {
           });
         });
         onStkChange();
-        // Auto-select right arm key for stk2 (prefer *_right if available)
         var stk2 = document.getElementById('stk2');
         for (var i = 0; i < stk2.options.length; i++) {
           if (stk2.options[i].value.indexOf('right') >= 0 && stk2.options[i].value.indexOf('joint_position') >= 0) {
@@ -202,6 +244,7 @@ function go() {
   var tp = document.getElementById('tp').value.trim();
   var dn = document.getElementById('dn').value.trim();
   var cn = document.getElementById('cn').value;
+  var yamlFilename = document.getElementById('yaml-sel').value;
   if (!tp) { document.getElementById('msg').textContent = '请填写数据集路径'; document.getElementById('msg').className = 'err'; return; }
   if (!cn) { document.getElementById('msg').textContent = '请先扫描路径并选择 camera'; document.getElementById('msg').className = 'err'; return; }
   if (!dn) dn = tp.split('/').filter(Boolean).slice(-2, -1)[0] || 'unknown';
@@ -214,18 +257,23 @@ function go() {
     dataset_name: dn,
     camera_name: cn,
     robot_type: document.getElementById('rt').value,
-    state_key: document.getElementById('stk').value,
-    state_key_start: parseInt(document.getElementById('stk-start').value) || 0,
-    state_key_end: parseInt(document.getElementById('stk-end').value) || null,
     episode_idx: parseInt(document.getElementById('ei').value) || 0,
     strike: parseInt(document.getElementById('sk').value) || 4,
-    is_dual_arm: isDualArm
+    yaml_filename: yamlFilename,
   };
 
-  if (isDualArm) {
-    payload.state_key_2 = document.getElementById('stk2').value;
-    payload.state_key_2_start = parseInt(document.getElementById('stk2-start').value) || 0;
-    payload.state_key_2_end = parseInt(document.getElementById('stk2-end').value) || null;
+  if (currentYamlInfo && currentYamlInfo.configurable) {
+    var overrides = {
+      state_key: document.getElementById('stk').value,
+      start: parseInt(document.getElementById('stk-start').value) || 0,
+      stop: parseInt(document.getElementById('stk-end').value) || null,
+    };
+    if (currentYamlInfo.processor_type === 'DualArmSliceProcessor') {
+      overrides.state_key_2 = document.getElementById('stk2').value;
+      overrides.start_2 = parseInt(document.getElementById('stk2-start').value) || 0;
+      overrides.stop_2 = parseInt(document.getElementById('stk2-end').value) || null;
+    }
+    payload.overrides = overrides;
   }
 
   fetch('/api/config/submit', {
@@ -264,8 +312,9 @@ function go() {
     }
   });
 }
-// Init
-checkDualArm();
+
+// Init: trigger YAML info for default selection
+onYamlChange();
 </script>
 </body>
 </html>
