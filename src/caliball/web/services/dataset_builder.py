@@ -134,14 +134,11 @@ class DatasetBuilder:
                 "overrides": dict | None,
             }
         """
-        import importlib
+        from hydra.utils import instantiate
+        from omegaconf import OmegaConf
 
         from caliball.dataset.lerobot_dataset import LeRobotDataset
-        from caliball.dataset.state_processors import (
-            DualArmSliceProcessor,
-            SliceProcessor,
-            StateProcessor,
-        )
+        from caliball.dataset.state_processors import StateProcessor
 
         yaml_path = _CONFIG_WEB_DIR / yaml_filename
         with open(yaml_path) as f:
@@ -149,7 +146,6 @@ class DatasetBuilder:
 
         ds_cfg = data.get("dataset", {})
         sp_cfg = dict(ds_cfg.get("state_processor", {}))
-        sp_target = sp_cfg.pop("_target_", "")
         ds_target = ds_cfg.get("_target_", "")
 
         state_keys = ds_cfg.get("state_keys")
@@ -169,23 +165,16 @@ class DatasetBuilder:
         if not state_keys:
             state_keys = ["observation.state"]
 
-        processor_map = {
-            "caliball.dataset.state_processors.SliceProcessor": SliceProcessor,
-            "caliball.dataset.state_processors.DualArmSliceProcessor": DualArmSliceProcessor,
-            "caliball.dataset.state_processors.StateProcessor": StateProcessor,
-        }
-        if sp_target in processor_map:
-            processor = processor_map[sp_target](**sp_cfg)
-        elif sp_target:
-            module_path, cls_name = sp_target.rsplit(".", 1)
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, cls_name)
-            processor = cls(**sp_cfg)
+        # Instantiate state_processor via Hydra
+        sp_target = sp_cfg.get("_target_", "")
+        if sp_target:
+            processor = instantiate(OmegaConf.create(sp_cfg))
         else:
             processor = StateProcessor()
 
         processor_type = sp_target.rsplit(".", 1)[-1] if sp_target else "StateProcessor"
 
+        # Construct dataset
         if ds_target in DatasetBuilder._CONFIGURABLE_DATASETS:
             dataset = LeRobotDataset(
                 repo_id=task_path,
@@ -194,15 +183,11 @@ class DatasetBuilder:
                 state_processor=processor,
             )
         else:
-            # 自定义 dataset：透传 YAML 中 dataset 下的所有参数（除 _target_ 和 state_processor）
-            module_path, cls_name = ds_target.rsplit(".", 1)
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, cls_name)
-            ds_kwargs = {k: v for k, v in ds_cfg.items()
-                         if k not in ("_target_", "state_processor", "state_keys")}
-            ds_kwargs.setdefault("repo_id", task_path)
-            ds_kwargs.setdefault("episodes", [episode_idx])
-            dataset = cls(**ds_kwargs)
+            # 自定义 dataset：透传 YAML 中 dataset 下的所有参数，用 Hydra instantiate
+            custom_cfg = {k: v for k, v in ds_cfg.items()}
+            custom_cfg.setdefault("repo_id", task_path)
+            # custom_cfg.setdefault("episodes", [episode_idx])
+            dataset = instantiate(OmegaConf.create(custom_cfg))
 
         info = {
             "yaml_filename": yaml_filename,
