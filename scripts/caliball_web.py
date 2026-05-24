@@ -374,18 +374,6 @@ def main():
         _set_image(Image.fromarray(video[first_mask_ref]))
         sam_svc.clear()
 
-        robot_html = ""
-        if _robot_types:
-            _opts = "".join(
-                f"<option value='{rt}'{' selected' if rt == robot_type else ''}>{rt}</option>"
-                for rt in _robot_types
-            )
-            robot_html = (
-                "<div style='margin-bottom:12px'><label style='font-size:14px'>Robot: "
-                f"<select id=rt style='padding:4px 8px;font-size:14px'>{_opts}</select>"
-                "</label></div>"
-            )
-
         shared_state.update_overlay(initial_overlay, "Left=foreground Right=background", 0)
         shared_state.clear_pipeline()
         app.config["frames"] = video
@@ -396,7 +384,7 @@ def main():
             "has_default_tracking": False, "has_default_masks": False,
             "has_pipeline": True,
             "initial_overlay": initial_overlay, "tracking_url": tracking_url,
-            "robot_html": robot_html, "dataset_html": "",
+            "robot_html": "", "dataset_html": "",
         }
         shared_state.set("loading_status", {"message": "Loading complete", "progress": 100, "done": True})
         print("[web] Annotate page ready")
