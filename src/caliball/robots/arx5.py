@@ -101,6 +101,8 @@ class _Arx5ArmTF(BaseTF):
             if jname in idx:
                 out[idx[jname]] = q[i]
         gripper = float(q[6])
+        # Clamp to URDF prismatic limits [0, 0.04765]
+        gripper = min(max(gripper, 0.0), 0.04765 * 2)
         if f"{p}link7" in idx:
             out[idx[f"{p}link7"]] = gripper / 2
         if f"{p}link8" in idx:
