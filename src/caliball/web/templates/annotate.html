@@ -40,6 +40,18 @@ body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 <button onclick="reconfig()" style="padding:6px 16px;font-size:13px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:4px">Back to Config</button>
 </div>
 {{ dataset_html | safe }}{{ robot_html | safe }}
+<!-- Intrinsic input (optional) -->
+<section class=step>
+<div class=sh><h3>Camera Intrinsic</h3>
+<label class=tg><input type=checkbox id=intr-auto checked onchange="togIntr()"> Auto (model estimate)</label></div>
+<div class='sb off' id=intr-panel style="padding:8px 12px">
+<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:13px">
+<label>fx <input id=intr-fx type=number step=any style="width:100px;padding:3px 6px"></label>
+<label>fy <input id=intr-fy type=number step=any style="width:100px;padding:3px 6px"></label>
+<label>cx <input id=intr-cx type=number step=any style="width:100px;padding:3px 6px"></label>
+<label>cy <input id=intr-cy type=number step=any style="width:100px;padding:3px 6px"></label>
+</div>
+</div></section>
 <!-- Step 1: Frame Selection -->
 <section class=step>
 <div class=sh><h3>1. Frame Selection</h3>
@@ -113,6 +125,10 @@ var HDT={{ has_default_tracking | tojson }},HDM={{ has_default_masks | tojson }}
 /* Per-frame SAM pts tracker (client side) */
 var samPtsMap={};
 S.ms.forEach(function(m){samPtsMap[m]=0;});
+/* Intrinsic toggle */
+function togIntr(){
+var auto=document.getElementById('intr-auto').checked;
+document.getElementById('intr-panel').classList.toggle('off',auto);}
 /* Frame grid */
 function renderGrid(){
 var g=document.getElementById('fg');g.innerHTML='';
@@ -242,7 +258,12 @@ fetch('/api/done',{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({start:S.s,end:S.e,maskRefs:S.ms,
 trackingX:S.tx,trackingY:S.ty,maskAuto:S.ma,
 armIndex:document.getElementById('arm-sel')?parseInt(document.getElementById('arm-sel').value):0,
-robotType:document.getElementById('rt')?document.getElementById('rt').value:''})})
+robotType:document.getElementById('rt')?document.getElementById('rt').value:'',
+intrinsicAuto:document.getElementById('intr-auto').checked,
+intrinsicFx:parseFloat(document.getElementById('intr-fx').value)||null,
+intrinsicFy:parseFloat(document.getElementById('intr-fy').value)||null,
+intrinsicCx:parseFloat(document.getElementById('intr-cx').value)||null,
+intrinsicCy:parseFloat(document.getElementById('intr-cy').value)||null})})
 .then(function(){if(HP){
 clearInterval(samTimer);
 document.querySelectorAll('.step').forEach(function(s){s.style.display='none'});

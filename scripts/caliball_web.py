@@ -474,6 +474,11 @@ def main():
                         "tracking_point": (float(d["trackingX"]), float(d["trackingY"])),
                         "masks": sam_svc.get_masks_for_refs(mask_refs),
                         "robot_type": d.get("robotType", robot_type),
+                        "intrinsic_auto": d.get("intrinsicAuto", True),
+                        "intrinsic_fx": d.get("intrinsicFx"),
+                        "intrinsic_fy": d.get("intrinsicFy"),
+                        "intrinsic_cx": d.get("intrinsicCx"),
+                        "intrinsic_cy": d.get("intrinsicCy"),
                     }
                     break
                 elif path == "/api/finish":
@@ -502,6 +507,17 @@ def main():
                     model_config.robot_type = sel_robot
                     new_robot = build_robot(sel_robot)
                     pipeline.update_robot(new_robot)
+
+                # Set user-provided intrinsic if not auto
+                if not result_val.get("intrinsic_auto", True):
+                    fx = result_val.get("intrinsic_fx")
+                    fy = result_val.get("intrinsic_fy")
+                    cx = result_val.get("intrinsic_cx")
+                    cy = result_val.get("intrinsic_cy")
+                    if fx and fy and cx and cy:
+                        user_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+                        pipeline._coarse._init_intrinsic(user_K)
+                        print(f"[web] Using user-provided intrinsic: fx={fx}, fy={fy}, cx={cx}, cy={cy}")
 
                 pipe_save = ensure_dir(result_dir / task_name / f"ep_{episode_idx:06d}" / "pipeline")
 
