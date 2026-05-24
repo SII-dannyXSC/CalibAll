@@ -13,45 +13,45 @@
 <a href="LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" height="20" />
 </a>
-<a href="README_zh.md">
-    <img alt="中文" src="https://img.shields.io/badge/中文-README-blue" height="20" />
+<a href="README.md">
+    <img alt="English" src="https://img.shields.io/badge/English-README-blue" height="20" />
 </a>
 
-**Sicheng Xie, Lingchen Meng, Zhiying Du, Shuyuan Tu, Haidong Cao, Jiaqi Leng, [Zuxuan Wu](https://zxwu.azurewebsites.net/)<sup>&dagger;</sup>, Yu-Gang Jiang**
+**谢思成, 孟凌晨, 杜之颖, 涂舒媛, 曹海东, 冷嘉琪, [吴祖煊](https://zxwu.azurewebsites.net/)<sup>&dagger;</sup>, 江宇刚**
 
-<sup>&dagger;</sup> Corresponding author
+<sup>&dagger;</sup> 通讯作者
 
 </div>
 
-## Highlights
+## 亮点
 
-- **One mark, any robot** — works with any robot arm using a single fiducial mark, no special calibration board needed
-- **Web-based interactive UI** — point-and-click calibration workflow with SAM3 auto-detection, DINOv2 tracking, and real-time pipeline visualization
-- **10+ datasets supported** — pre-configured for Berkeley Autolab UR5, DROID, RoboMIND, RDT ALOHA, and more
-- **Automatic labeling** — generate 2D/3D annotations (bounding boxes, masks, keypoints, poses) from calibration results
+- **一个标记，适配任意机器人** — 无需专用标定板，仅需一个末端标记点即可完成手眼标定
+- **Web 交互式界面** — 点击式标定流程，支持 SAM3 自动检测、DINOv2 追踪点识别、实时 Pipeline 可视化
+- **10+ 数据集开箱即用** — 预配置 Berkeley Autolab UR5、DROID、RoboMIND、RDT ALOHA 等
+- **自动标注** — 基于标定结果自动生成 2D/3D 标注（包围框、掩码、关键点、位姿）
 
-## Method
+## 方法
 
 <p align="center">
   <img src="assets/method.jpg" width="100%"/>
 </p>
 
-## Demo
+## 演示
 
 <p align="center">
   <img src="assets/franka+hand.gif" width="80%"/>
 </p>
 
-## Supported Robots & Datasets
+## 支持的机器人与数据集
 
-**Robot Arms:** Franka Panda, UR5e, xArm7
+**机械臂：** Franka Panda, UR5e, xArm7
 
-**Grippers:** Panda Hand, Robotiq 85, xArm Gripper
+**夹爪：** Panda Hand, Robotiq 85, xArm Gripper
 
-**Dual-Arm Systems:** ALOHA (Cobot Magic), ARX5 (RobotWin)
+**双臂系统：** ALOHA (Cobot Magic), ARX5 (RobotWin)
 
-| Dataset | Robot | Config |
-|---------|-------|--------|
+| 数据集 | 机器人 | 配置文件 |
+|--------|--------|----------|
 | Berkeley Autolab UR5 | UR5e + Robotiq | `berkeley_autolab_ur5.yaml` |
 | DROID | Franka + Robotiq | `droid.yaml` |
 | NYU Franka | Franka + Panda Hand | `nyu_franka.yaml` |
@@ -64,9 +64,9 @@
 | UTokyo xArm | xArm7 | `utokyo_xarm.yaml` |
 | Non-Prehensile | Franka | `nonprehensile.yaml` |
 
-## Installation
+## 安装
 
-### 1. Create Environment
+### 1. 创建环境
 
 ```bash
 conda create -n caliball python=3.12 -y
@@ -74,13 +74,13 @@ conda activate caliball
 conda install ffmpeg -y
 ```
 
-### 2. Install PyTorch (CUDA 12.8)
+### 2. 安装 PyTorch (CUDA 12.8)
 
 ```bash
 pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128
 ```
 
-### 3. Install CalibAll
+### 3. 安装 CalibAll
 
 ```bash
 git clone https://github.com/SII-dannyXSC/CalibAll.git
@@ -89,7 +89,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-### 4. Install Special Dependencies
+### 4. 安装特殊依赖
 
 ```bash
 # nvdiffrast
@@ -103,31 +103,31 @@ pip install --extra-index-url https://miropsota.github.io/torch_packages_builder
 pip install git+https://github.com/microsoft/MoGe.git
 ```
 
-### 5. Clone Third-Party Repos
+### 5. 克隆第三方仓库
 
 ```bash
 mkdir -p third_party && cd third_party
 
-# Co-Tracker (point tracking)
+# Co-Tracker（点追踪）
 git clone https://github.com/facebookresearch/co-tracker
 cd co-tracker && pip install -e . && cd ..
 
-# SAM3 (segmentation)
+# SAM3（分割）
 git clone https://github.com/facebookresearch/sam3.git
 cd sam3 && pip install -e . && cd ..
 
-# DINOv2 (feature extraction)
+# DINOv2（特征提取）
 git clone https://github.com/facebookresearch/dinov2
 
-# Robot URDF & mesh files
+# 机器人 URDF 和 mesh 文件
 git clone https://github.com/Daniella1/urdf_files_dataset.git urdf
 
 cd ..
 ```
 
-### 6. Download Checkpoints
+### 6. 下载模型权重
 
-Place model checkpoints under `ckpt/`:
+将模型权重放在 `ckpt/` 目录下：
 ```
 ckpt/
 ├── dinov2/
@@ -138,31 +138,31 @@ ckpt/
     └── sam3.pt
 ```
 
-## Quick Start
+## 快速开始
 
-### Web UI (Recommended)
+### Web UI（推荐）
 
-Launch the interactive calibration interface:
+启动交互式标定界面：
 
 ```bash
 python scripts/caliball_web.py
 ```
 
-Open `http://127.0.0.1:8765` in your browser. The workflow:
+浏览器打开 `http://127.0.0.1:8765`，流程如下：
 
-1. **Configure** — enter dataset path, scan for cameras, select dataset config and robot type
-2. **Annotate** — select frames, set tracking point (or auto-detect with DINOv2), draw masks (or auto-detect with SAM3)
-3. **Pipeline** — automatic tracking, coarse PnP, and differentiable refinement
-4. **Download** — get intrinsic/extrinsic matrices and calibration YAML
+1. **配置** — 输入数据集路径，扫描相机，选择数据集配置和机器人类型
+2. **标注** — 选择帧范围，设置追踪点（支持 DINOv2 自动检测），绘制掩码（支持 SAM3 自动检测）
+3. **Pipeline** — 自动执行追踪、粗估 PnP、可微优化
+4. **下载** — 获取内参/外参矩阵和标定 YAML 文件
 
-Optional flags:
+可选参数：
 ```bash
 python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
 ```
 
-### CLI: Batch Labeling
+### CLI：批量标注
 
-Generate annotations for an entire dataset:
+对整个数据集生成标注：
 
 ```bash
 python scripts/label.py \
@@ -170,7 +170,7 @@ python scripts/label.py \
     --output_dir ./label_out/berkeley_autolab_ur5
 ```
 
-### CLI: Visualize Results
+### CLI：可视化结果
 
 ```bash
 python scripts/visualize.py \
@@ -179,9 +179,9 @@ python scripts/visualize.py \
     --output_dir ./label_out/vis
 ```
 
-### CLI: Verify Robot URDF
+### CLI：验证机器人 URDF
 
-Check if robot meshes and FK are correctly configured:
+检查机器人 mesh 和正运动学配置是否正确：
 
 ```bash
 python scripts/check_robot_urdf.py \
@@ -189,33 +189,33 @@ python scripts/check_robot_urdf.py \
     --output /tmp/robot.ply
 ```
 
-## Project Structure
+## 项目结构
 
 ```
 CalibAll/
 ├── src/caliball/
-│   ├── algorithms/      # DINOv2 recognizer, CoTracker, SAM3, PnP solver
-│   ├── config/          # Dataset YAML configs and calibration files
-│   │   ├── dataset/     # Dataset loading profiles (for Web UI)
-│   │   └── calibration/ # Intrinsic/extrinsic calibration results
-│   ├── dataset/         # LeRobot dataset reader + state processors
-│   ├── labeling/        # Pose calculation, mask rendering, orchestration
-│   ├── pipeline/        # CoarseInit + Refinement pipeline
-│   ├── rendering/       # NVDiffrast differentiable renderer
-│   ├── robots/          # Robot registry (FK, mesh paths, composites)
-│   ├── utils/           # Video I/O, visualization, mesh loading
-│   └── web/             # Flask web app (routes, services, templates)
+│   ├── algorithms/      # DINOv2 识别、CoTracker 追踪、SAM3 分割、PnP 求解
+│   ├── config/          # 数据集 YAML 配置和标定文件
+│   │   ├── dataset/     # 数据集加载配置（Web UI 使用）
+│   │   └── calibration/ # 内外参标定结果
+│   ├── dataset/         # LeRobot 数据集读取器 + 状态处理器
+│   ├── labeling/        # 位姿计算、掩码渲染、标注编排
+│   ├── pipeline/        # CoarseInit + Refinement 流水线
+│   ├── rendering/       # NVDiffrast 可微渲染器
+│   ├── robots/          # 机器人注册表（正运动学、mesh 路径、组合体）
+│   ├── utils/           # 视频 I/O、可视化、mesh 加载
+│   └── web/             # Flask Web 应用（路由、服务、模板）
 ├── scripts/
-│   ├── caliball_web.py  # Web UI entry point
-│   ├── label.py         # Batch labeling pipeline
-│   ├── visualize.py     # Result visualization
-│   └── check_robot_urdf.py  # Robot mesh verification
+│   ├── caliball_web.py  # Web UI 入口
+│   ├── label.py         # 批量标注流水线
+│   ├── visualize.py     # 结果可视化
+│   └── check_robot_urdf.py  # 机器人 mesh 验证
 ├── third_party/         # Co-Tracker, SAM3, DINOv2, nvdiffrast, URDF
-├── ckpt/                # Model checkpoints
-└── assets/              # Images and demos
+├── ckpt/                # 模型权重
+└── assets/              # 图片和演示素材
 ```
 
-## Citation
+## 引用
 
 ```bibtex
 @article{xie2024caliball,
@@ -226,6 +226,6 @@ CalibAll/
 }
 ```
 
-## License
+## 许可证
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
