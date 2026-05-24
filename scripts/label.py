@@ -33,6 +33,8 @@ import numpy as np
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 from caliball.config import (
     compose_job_config_from_path,
     instantiate_dataset,
@@ -107,13 +109,17 @@ def main():
     elif label_over.get("arm_mesh_num") is not None:
         arm_mesh_num = int(label_over["arm_mesh_num"])
     else:
-        arm_cfg = (cfg.robot.get("arm") if hasattr(cfg.robot, "get")
-                   else getattr(cfg.robot, "arm", None))
-        arm_mesh_num = (len(list(arm_cfg.mesh_paths))
-                        if arm_cfg and getattr(arm_cfg, "mesh_paths", None) else None)
+        if "robot" in cfg:
+            arm_cfg = (cfg.robot.get("arm") if hasattr(cfg.robot, "get")
+                       else getattr(cfg.robot, "arm", None))
+            arm_mesh_num = (len(list(arm_cfg.mesh_paths))
+                            if arm_cfg and getattr(arm_cfg, "mesh_paths", None) else None)
+        else:
+            arm_mesh_num = None
 
     # Init robot TF
-    print(f"[INFO] tf: {cfg.tf._target_}")
+    tf_desc = cfg.get("robot_type") or (cfg.tf._target_ if "tf" in cfg and hasattr(cfg.tf, "_target_") else "unknown")
+    print(f"[INFO] tf: {tf_desc}")
     tf_model = instantiate_tf(cfg)
     n_arms   = tf_model.n_arms
     arm_names = (["left", "right"] if n_arms == 2
@@ -127,8 +133,9 @@ def main():
 
     # Load meshes
     if not skip_mask:
-        print("[INFO] 加载 robot mesh_paths...")
-        vertices_list, faces_list = load_meshes(cfg.robot, device, project_root=_PROJECT_ROOT)
+        print("[INFO] Loading robot meshes...")
+        robot_for_mesh = tf_model if hasattr(cfg, "robot_type") else cfg.robot
+        vertices_list, faces_list = load_meshes(robot_for_mesh, device, project_root=_PROJECT_ROOT)
     else:
         vertices_list, faces_list = [], []
 

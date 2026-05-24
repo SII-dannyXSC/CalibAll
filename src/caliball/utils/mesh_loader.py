@@ -15,7 +15,7 @@ def _get_mesh_paths(robot_config) -> list:
 
     优先使用顶层 mesh_paths；不存在时自动拼接 arm.mesh_paths + gripper.mesh_paths。
     """
-    top = getattr(robot_config, "mesh_paths", None)
+    top = getattr(robot_config, "mesh_paths", None) or getattr(robot_config, "MESH_PATHS", None)
     if top is not None:
         return list(top)
 

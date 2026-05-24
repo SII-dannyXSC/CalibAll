@@ -1,0 +1,23 @@
+calib_dataset_name: franka_1rgb
+robot_type: franka_robotiq
+dataset_name: bread_in_basket
+base_path: /cpfs02/user/xiesicheng.xsc/project/CalibAll/data/caliball_data/RoboMIND_lerobot_v2.1/benchmark1_0_compressed/franka_1rgb
+
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.states.joint_position
+  state_processor:
+    _target_: caliball.dataset.state_processors.SliceProcessor
+    stop: 7
+
+tf:
+  gripper_mount_yaw_deg: 30.0
+  grasp_point_rotation_align: [0.0, 0.0, -30.0]
+
+label:
+  output_dir: ./label_out/${calib_dataset_name}/${dataset_name}
+  calib_dataset_name: ${calib_dataset_name}
+  camera_names:
+    - observation.images.camera_top
+  eef_rotation_type: euler_xyz
