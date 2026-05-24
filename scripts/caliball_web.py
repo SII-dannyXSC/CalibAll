@@ -473,7 +473,7 @@ def main():
                         "mask_refs": mask_refs,
                         "tracking_point": (float(d["trackingX"]), float(d["trackingY"])),
                         "masks": sam_svc.get_masks_for_refs(mask_refs),
-                        "robot_type": d.get("robotType", robot_type),
+                        "robot_type": d.get("robotType") or robot_type,
                         "intrinsic_auto": d.get("intrinsicAuto", True),
                         "intrinsic_fx": d.get("intrinsicFx"),
                         "intrinsic_fy": d.get("intrinsicFy"),

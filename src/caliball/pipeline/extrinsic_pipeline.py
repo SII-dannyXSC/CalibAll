@@ -96,12 +96,10 @@ class ExtrinsicPipeline:
             cv2.circle(vis, (int(pt[0]), int(pt[1])), 3, (0, 255, 0), -1)
 
         # 检查 3D 轨迹质量
-        trajectory_warning = self._check_trajectory_quality(pts_3d)
         tracking_video = save_dir / "tracking.mp4"
-        _report("coarse", "Coarse 外参估计完成" + (f" ⚠️ {trajectory_warning}" if trajectory_warning else ""),
+        _report("coarse", "Coarse extrinsic estimated",
                 image=vis,
-                tracking_video_path=str(tracking_video) if tracking_video.exists() else None,
-                warning=trajectory_warning)
+                tracking_video_path=str(tracking_video) if tracking_video.exists() else None)
 
         # Free CoarseInit GPU memory (only drop local ref, like the original pipeline_fn)
         import torch
@@ -152,28 +150,6 @@ class ExtrinsicPipeline:
             "loss_dict": loss_dict,
             "save_dir": str(save_dir),
         }
-
-    def _check_trajectory_quality(self, points_3d: np.ndarray) -> str:
-        """检查 3D 轨迹质量，返回警告信息（空字符串表示正常）。"""
-        pts = np.asarray(points_3d)
-        if len(pts) < 3:
-            return "轨迹点数不足（<3），PnP 可能不准确"
-        centered = pts - pts.mean(axis=0)
-        _, s, _ = np.linalg.svd(centered, full_matrices=False)
-        # s[0] >= s[1] >= s[2]
-        linearity = s[1] / (s[0] + 1e-8)
-        planarity = s[2] / (s[0] + 1e-8)
-        spread = s[0]
-        warnings = []
-        if spread < 0.01:
-            warnings.append("运动幅度极小")
-        if linearity < 0.05:
-            warnings.append(f"近似共线(ratio={linearity:.3f})")
-        elif planarity < 0.02:
-            warnings.append(f"近似共面(ratio={planarity:.3f})")
-        if warnings:
-            return "3D轨迹质量差: " + ", ".join(warnings) + "。建议选择运动范围更大的帧段"
-        return ""
 
     def _render_video(self, clip, joint_angles, tsfm, K, save_dir, report_fn) -> Path:
         """Render annotation overlay video."""
