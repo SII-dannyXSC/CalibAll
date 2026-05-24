@@ -17,6 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
 from caliball.config import compose_job_config_from_path, instantiate_tf
 from caliball.robots._composite import ArmGripperCompositeTF
 from caliball.robots._dual_arm import DualArmTF
@@ -62,10 +64,11 @@ def main():
     cfg = compose_job_config_from_path(args.config, project_root=_REPO_ROOT)
 
     print(f"[INFO] config: {args.config}")
-    print(f"  tf: {cfg.tf.get('_target_')}")
+    tf_desc = cfg.get("robot_type") or (cfg.tf.get("_target_") if "tf" in cfg else "unknown")
+    print(f"  tf: {tf_desc}")
 
     tf = instantiate_tf(cfg)
-    mesh_paths = _get_mesh_paths(cfg.robot)
+    mesh_paths = _get_mesh_paths(tf if hasattr(cfg, "robot_type") else cfg.robot)
 
     if args.joints is not None:
         state = np.array(args.joints, dtype=np.float64)
