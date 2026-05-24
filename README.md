@@ -11,9 +11,6 @@
 <a href="LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" height="20" />
 </a>
-<a href="README_zh.md">
-    <img alt="中文" src="https://img.shields.io/badge/中文-README-blue" height="20" />
-</a>
 
 **Sicheng Xie<sup>1,2,3</sup>, Lingchen Meng<sup>3</sup>, Zijie Diao<sup>1</sup>, Haidong Cao<sup>1</sup>, Zhiying Du<sup>1</sup>, Shuyuan Tu<sup>1</sup>, Jiaqi Leng<sup>1</sup>, Qiuyue Wang<sup>3</sup>, Mingsheng Li<sup>3</sup>, Shuai Bai<sup>3</sup>, [Zuxuan Wu](https://zxwu.azurewebsites.net/)<sup>1,2,&dagger;</sup>, Yu-Gang Jiang<sup>1,&dagger;</sup>**
 
@@ -23,12 +20,11 @@
 
 </div>
 
-## Highlights
+## About
 
-- **Unified cross-embodiment actions** — convert heterogeneous robot actions into standardized camera-frame representation with consistent geometric semantics across single-arm and bimanual robots
-- **Training-free calibration** — robot-independent, coarse-to-fine pipeline: temporal PnP initialization + differentiable rendering refinement, no robot-specific training data needed
-- **16 datasets, 4 platforms, ~97K episodes** — pre-configured for Franka, UR5e, xArm7, ALOHA and more, producing standardized TCP-pose actions and auxiliary annotations
-- **Web-based interactive UI** — point-and-click workflow with SAM3 auto-detection, DINOv2 tracking, real-time pipeline visualization
+CalibAll is a training-free, robot-independent pipeline for **camera extrinsic calibration** and **automatic annotation** of offline robot datasets. Given video and joint angles, it estimates camera intrinsics and extrinsics via coarse-to-fine optimization (temporal PnP + differentiable rendering), then produces standardized TCP-pose actions, 2D/3D bounding boxes, segmentation masks, and keypoints.
+
+**Supported robots:** Franka Panda, UR5e, xArm7, ALOHA (Cobot Magic), ARX5 (RobotWin), with Robotiq 85, Panda Hand, and xArm Gripper.
 
 ## Installation
 
