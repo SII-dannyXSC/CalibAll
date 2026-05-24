@@ -22,13 +22,28 @@
 
 ## About
 
-CalibAll is a training-free, robot-independent pipeline for **camera extrinsic calibration** and **automatic annotation** of offline robot datasets. Given video and joint angles, it estimates camera intrinsics and extrinsics via coarse-to-fine optimization (temporal PnP + differentiable rendering), then produces standardized TCP-pose actions, 2D/3D bounding boxes, segmentation masks, and keypoints.
+CalibAll is a training-free, robot-independent pipeline for **camera extrinsic calibration** and **automatic annotation** for offline robot datasets. Given video and joint angles, it estimates camera intrinsics and extrinsics via coarse-to-fine optimization (temporal PnP + differentiable rendering), then produces standardized TCP-pose actions, 2D/3D bounding boxes, segmentation masks.
 
-**Supported robots:** Franka Panda, UR5e, xArm7, ALOHA (Cobot Magic), ARX5 (RobotWin), with Robotiq 85, Panda Hand, and xArm Gripper.
+**Current Supported robots:** Franka Panda, UR5e, xArm7, ALOHA, with Robotiq 85, Panda Hand, and xArm Gripper.
 
 ## Installation
 
-### 1. Create Environment
+### Option A: Docker (Recommended)
+
+```bash
+# Build
+docker build -t caliball .
+
+# Run Web UI (mount checkpoints and data)
+docker run --gpus all -p 8765:8765 \
+    -v /path/to/ckpt:/workspace/CalibAll/ckpt \
+    -v /path/to/data:/workspace/CalibAll/data \
+    caliball
+```
+
+### Option B: Conda
+
+#### 1. Create Environment
 
 ```bash
 conda create -n caliball python=3.12 -y
@@ -36,13 +51,13 @@ conda activate caliball
 conda install ffmpeg -y
 ```
 
-### 2. Install PyTorch (CUDA 12.8)
+#### 2. Install PyTorch (CUDA 12.8)
 
 ```bash
 pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128
 ```
 
-### 3. Install CalibAll
+#### 3. Install CalibAll
 
 ```bash
 git clone https://github.com/SII-dannyXSC/CalibAll.git
@@ -51,7 +66,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-### 4. Install Special Dependencies
+#### 4. Install Special Dependencies
 
 ```bash
 # nvdiffrast
@@ -65,7 +80,7 @@ pip install --extra-index-url https://miropsota.github.io/torch_packages_builder
 pip install git+https://github.com/microsoft/MoGe.git
 ```
 
-### 5. Clone Third-Party Repos
+#### 5. Clone Third-Party Repos
 
 ```bash
 mkdir -p third_party && cd third_party
@@ -87,7 +102,7 @@ git clone https://github.com/Daniella1/urdf_files_dataset.git urdf
 cd ..
 ```
 
-### 6. Download Checkpoints
+#### 6. Download Checkpoints
 
 Place model checkpoints under `ckpt/`:
 ```

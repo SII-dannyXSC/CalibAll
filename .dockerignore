@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+ckpt/
+data/
+label_out/
+manual_label/
+results/
+*.mp4
+*.npy
+*.pkl
+.claude/
