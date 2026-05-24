@@ -106,6 +106,7 @@ class DatasetBuilder:
             "processor_type": processor_type,
             "state_keys": state_keys,
             "processor_params": processor_params,
+            "dual_arm": data.get("dual_arm", False),
         }
 
     @staticmethod
@@ -194,5 +195,6 @@ class DatasetBuilder:
             "state_keys": state_keys,
             "processor_type": processor_type,
             "overrides": overrides,
+            "dual_arm": data.get("dual_arm", False),
         }
         return dataset, info

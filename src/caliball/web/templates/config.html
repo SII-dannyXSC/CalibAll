@@ -84,7 +84,7 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
     </div>
   </div>
 
-  <!-- Dual arm: second state_key (shown for DualArmSliceProcessor) -->
+  <!-- Dual arm: second state_key (shown when dual_arm) -->
   <div id="dual-arm-row" class="row" style="display:none">
     <div class="f" style="flex:2">
       <label>state_key 2 (right arm joints)</label>
@@ -152,7 +152,7 @@ function onYamlChange() {
     if (info.configurable) {
       stateSection.classList.remove('hidden');
       yamlFixed.classList.add('hidden');
-      if (info.processor_type === 'DualArmSliceProcessor') {
+      if (info.dual_arm) {
         dualRow.style.display = 'flex';
         document.getElementById('stk-label').textContent = 'state_key (left arm joints)';
       } else {
@@ -268,7 +268,7 @@ function go() {
       start: parseInt(document.getElementById('stk-start').value) || 0,
       stop: parseInt(document.getElementById('stk-end').value) || null,
     };
-    if (currentYamlInfo.processor_type === 'DualArmSliceProcessor') {
+    if (currentYamlInfo.dual_arm) {
       overrides.state_key_2 = document.getElementById('stk2').value;
       overrides.start_2 = parseInt(document.getElementById('stk2-start').value) || 0;
       overrides.stop_2 = parseInt(document.getElementById('stk2-end').value) || null;
