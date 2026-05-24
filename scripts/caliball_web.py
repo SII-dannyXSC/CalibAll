@@ -385,6 +385,7 @@ def main():
             "has_pipeline": True,
             "initial_overlay": initial_overlay, "tracking_url": tracking_url,
             "robot_html": "", "dataset_html": "",
+            "is_dual_arm": ds_info.get("processor_type") == "DualArmSliceProcessor",
         }
         shared_state.set("loading_status", {"message": "Loading complete", "progress": 100, "done": True})
         print("[web] Annotate page ready")
