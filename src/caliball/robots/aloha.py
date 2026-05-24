@@ -145,6 +145,7 @@ class _AlohaArmTF(BaseTF):
 # ---------------------------------------------------------------------------
 
 @register_robot("aloha_cobot_magic")
+@register_robot("aloha")
 class AlohaCobotMagicTF(DualArmTF):
     """ALOHA dual-arm. q: (14,) = left arm 7 + right arm 7, order [left, right].
 
