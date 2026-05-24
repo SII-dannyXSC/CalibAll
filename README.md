@@ -1,8 +1,6 @@
 <div align="center">
 
-# CalibAll
-
-### Unify Robot Actions in Camera Frame
+# Unify Robot Actions in Camera Frame
 
 <a href="https://arxiv.org/abs/2511.17001">
     <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.17001-red?logo=arxiv" height="20" />
@@ -17,52 +15,20 @@
     <img alt="中文" src="https://img.shields.io/badge/中文-README-blue" height="20" />
 </a>
 
-**Sicheng Xie, Lingchen Meng, Zhiying Du, Shuyuan Tu, Haidong Cao, Jiaqi Leng, [Zuxuan Wu](https://zxwu.azurewebsites.net/)<sup>&dagger;</sup>, Yu-Gang Jiang**
+**Sicheng Xie<sup>1,2,3</sup>, Lingchen Meng<sup>3</sup>, Zijie Diao<sup>1</sup>, Haidong Cao<sup>1</sup>, Zhiying Du<sup>1</sup>, Shuyuan Tu<sup>1</sup>, Jiaqi Leng<sup>1</sup>, Qiuyue Wang<sup>3</sup>, Mingsheng Li<sup>3</sup>, Shuai Bai<sup>3</sup>, [Zuxuan Wu](https://zxwu.azurewebsites.net/)<sup>1,2,&dagger;</sup>, Yu-Gang Jiang<sup>1,&dagger;</sup>**
 
-<sup>&dagger;</sup> Corresponding author
+<sup>1</sup> Institute of Trustworthy Embodied AI, Fudan University &nbsp; <sup>2</sup> Shanghai Innovation Institute &nbsp; <sup>3</sup> Qwen Team, Alibaba Inc.
+
+<sup>&dagger;</sup> Corresponding authors
 
 </div>
 
 ## Highlights
 
-- **One mark, any robot** — works with any robot arm using a single fiducial mark, no special calibration board needed
-- **Web-based interactive UI** — point-and-click calibration workflow with SAM3 auto-detection, DINOv2 tracking, and real-time pipeline visualization
-- **10+ datasets supported** — pre-configured for Berkeley Autolab UR5, DROID, RoboMIND, RDT ALOHA, and more
-- **Automatic labeling** — generate 2D/3D annotations (bounding boxes, masks, keypoints, poses) from calibration results
-
-## Method
-
-<p align="center">
-  <img src="assets/method.jpg" width="100%"/>
-</p>
-
-## Demo
-
-<p align="center">
-  <img src="assets/franka+hand.gif" width="80%"/>
-</p>
-
-## Supported Robots & Datasets
-
-**Robot Arms:** Franka Panda, UR5e, xArm7
-
-**Grippers:** Panda Hand, Robotiq 85, xArm Gripper
-
-**Dual-Arm Systems:** ALOHA (Cobot Magic), ARX5 (RobotWin)
-
-| Dataset | Robot | Config |
-|---------|-------|--------|
-| Berkeley Autolab UR5 | UR5e + Robotiq | `berkeley_autolab_ur5.yaml` |
-| DROID | Franka + Robotiq | `droid.yaml` |
-| NYU Franka | Franka + Panda Hand | `nyu_franka.yaml` |
-| RoboMIND Franka | Franka + Robotiq | `robomind_franka.yaml` |
-| RoboMIND UR5e | UR5e + Robotiq | `robomind_ur5e_1rgb.yaml` |
-| RoboMIND ALOHA | ALOHA | `robomind_aloha.yaml` |
-| RDT ALOHA | ARX5 | `rdt_aloha.yaml` |
-| TOTO | Franka + Panda Hand | `toto.yaml` |
-| UCSD Kitchen | xArm7 | `ucsd_kitchen.yaml` |
-| UTokyo xArm | xArm7 | `utokyo_xarm.yaml` |
-| Non-Prehensile | Franka | `nonprehensile.yaml` |
+- **Unified cross-embodiment actions** — convert heterogeneous robot actions into standardized camera-frame representation with consistent geometric semantics across single-arm and bimanual robots
+- **Training-free calibration** — robot-independent, coarse-to-fine pipeline: temporal PnP initialization + differentiable rendering refinement, no robot-specific training data needed
+- **16 datasets, 4 platforms, ~97K episodes** — pre-configured for Franka, UR5e, xArm7, ALOHA and more, producing standardized TCP-pose actions and auxiliary annotations
+- **Web-based interactive UI** — point-and-click workflow with SAM3 auto-detection, DINOv2 tracking, real-time pipeline visualization
 
 ## Installation
 

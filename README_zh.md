@@ -17,7 +17,9 @@
     <img alt="English" src="https://img.shields.io/badge/English-README-blue" height="20" />
 </a>
 
-**谢思成, 孟凌晨, 杜之颖, 涂舒媛, 曹海东, 冷嘉琪, [吴祖煊](https://zxwu.azurewebsites.net/)<sup>&dagger;</sup>, 江宇刚**
+**谢思成<sup>1,2,3</sup>, 孟凌晨<sup>3</sup>, 刁子杰<sup>1</sup>, 曹海东<sup>1</sup>, 杜之颖<sup>1</sup>, 涂舒媛<sup>1</sup>, 冷嘉琪<sup>1</sup>, 王秋月<sup>3</sup>, 李明晟<sup>3</sup>, 白帅<sup>3</sup>, [吴祖煊](https://zxwu.azurewebsites.net/)<sup>1,2,&dagger;</sup>, 江宇刚<sup>1,&dagger;</sup>**
+
+<sup>1</sup> 复旦大学可信具身智能研究所 &nbsp; <sup>2</sup> 上海创新研究院 &nbsp; <sup>3</sup> 阿里巴巴 Qwen 团队
 
 <sup>&dagger;</sup> 通讯作者
 
@@ -25,10 +27,10 @@
 
 ## 亮点
 
-- **一个标记，适配任意机器人** — 无需专用标定板，仅需一个末端标记点即可完成手眼标定
-- **Web 交互式界面** — 点击式标定流程，支持 SAM3 自动检测、DINOv2 追踪点识别、实时 Pipeline 可视化
-- **10+ 数据集开箱即用** — 预配置 Berkeley Autolab UR5、DROID、RoboMIND、RDT ALOHA 等
-- **自动标注** — 基于标定结果自动生成 2D/3D 标注（包围框、掩码、关键点、位姿）
+- **统一跨具身动作表示** — 将异构机器人动作转换为相机坐标系下的标准化表示，在单臂和双臂机器人间保持一致的几何语义
+- **免训练标定** — 与机器人无关的粗到精流水线：时序 PnP 初始化 + 可微渲染优化，无需机器人特定训练数据
+- **16 个数据集，4 个平台，约 97K episodes** — 预配置 Franka、UR5e、xArm7、ALOHA 等，生成标准化 TCP 位姿动作和辅助标注
+- **Web 交互式界面** — 点击式工作流，支持 SAM3 自动检测、DINOv2 追踪、实时 Pipeline 可视化
 
 ## 方法
 
