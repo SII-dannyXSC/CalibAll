@@ -56,8 +56,9 @@ mkdir -p dinov2 && cd dinov2
 wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth
 cd ..
 
-# SAM3 (6.5 GB)
-git clone https://huggingface.co/facebook/sam3
+# SAM3 (6.5 GB) — from ModelScope (recommended) or Hugging Face
+git clone https://www.modelscope.cn/models/facebook/sam3.git
+# Alternative: git clone https://huggingface.co/facebook/sam3
 
 cd ..
 ```
