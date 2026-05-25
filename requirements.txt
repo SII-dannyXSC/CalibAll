@@ -21,3 +21,4 @@ av
 flask
 setuptools==75.0.0
 einops
+pycocotools

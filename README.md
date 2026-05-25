@@ -76,7 +76,7 @@ ckpt/
 ├── dinov2/
 │   └── dinov2_vitb14_pretrain.pth
 ├── moge/
-│   └── (HuggingFace model files)
+│   └── model.pt
 └── sam3/
     ├── sam3.pt
     ├── model.safetensors
