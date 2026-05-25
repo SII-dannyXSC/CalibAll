@@ -194,8 +194,8 @@ CalibAll/
 
 ```bibtex
 @article{xie2024caliball,
-    title={Stable Offline Hand-Eye Calibration for any Robot with Just One Mark},
-    author={Xie, Sicheng and Meng, Lingchen and Du, Zhiying and Tu, Shuyuan and Cao, Haidong and Leng, Jiaqi and Wu, Zuxuan and Jiang, Yu-Gang},
+    title={Unify Robot Actions in Camera Frame},
+    author={Xie, Sicheng and Meng, Lingchen and Diao, Zijie and Cao, Haidong and Du, Zhiying and Tu, Shuyuan and Leng, Jiaqi and Wang, Qiuyue and Li, Mingsheng and Bai, Shuai and Wu, Zuxuan and Jiang, Yu-Gang},
     journal={arXiv preprint arXiv:2511.17001},
     year={2024}
 }
