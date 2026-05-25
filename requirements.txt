@@ -15,10 +15,6 @@ huggingface-hub
 jsonlines
 trimesh
 typing-extensions
-tensorflow
-tensorflow-datasets
-debugpy
-decord
 pycollada
 imageio[ffmpeg]
 flask
