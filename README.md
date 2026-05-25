@@ -39,6 +39,7 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 | ✅ | ALOHA / ARX5 dual-arm |
 | ⬜ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
 | ⬜ | Docker support |
+| ⬜ | More dataset formats |
 | ⬜ | More robot embodiments |
 
 ## Prerequisites
