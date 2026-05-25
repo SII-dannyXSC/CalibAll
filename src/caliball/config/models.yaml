@@ -11,4 +11,4 @@ tracker_ckpt_path: ckpt/cotracker/scaled_offline.pth
 bpe_path:  third_party/sam3/sam3/assets/bpe_simple_vocab_16e6.txt.gz
 ckpt_path: ckpt/sam3/sam3.pt
 
-moge_model_path: ckpt/moge
+moge_model_path: ckpt/moge/model.pt
