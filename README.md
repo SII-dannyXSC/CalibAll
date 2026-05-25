@@ -157,35 +157,6 @@ Optional flags:
 python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
 ```
 
-### CLI: Batch Labeling
-
-Generate annotations for an entire dataset:
-
-```bash
-python scripts/label.py \
-    --config src/caliball/config/berkeley_autolab_ur5.yaml \
-    --output_dir ./label_out/berkeley_autolab_ur5
-```
-
-### CLI: Visualize Results
-
-```bash
-python scripts/visualize.py \
-    --json_path ./label_out/berkeley_autolab_ur5/episode_000000.json \
-    --task_path /path/to/dataset/task_name \
-    --output_dir ./label_out/vis
-```
-
-### CLI: Verify Robot URDF
-
-Check if robot meshes and FK are correctly configured:
-
-```bash
-python scripts/check_robot_urdf.py \
-    --config src/caliball/config/berkeley_autolab_ur5.yaml \
-    --output /tmp/robot.ply
-```
-
 ## Project Structure
 
 ```
