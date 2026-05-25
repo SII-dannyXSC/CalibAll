@@ -141,6 +141,7 @@ cd ..
 
 Download demo data:
 ```bash
+pip install huggingface_hub[cli]
 huggingface-cli download dannyXSC/Caliball_demo --repo-type dataset --local-dir data/demo
 ```
 
