@@ -80,9 +80,8 @@ def preprocess_images(img_pil, mode="crop"):
 class MoGeEstimator:
     def __init__(self, model_id=None, device=None):
         self.device = device
-        # Local path first, then HF Hub
         if model_id is None:
-            model_id = _DEFAULT_LOCAL_PATH if os.path.isdir(_DEFAULT_LOCAL_PATH) else _DEFAULT_HF_ID
+            model_id = _DEFAULT_HF_ID
         self.moge = MoGeModel.from_pretrained(model_id)
 
         if device is not None:

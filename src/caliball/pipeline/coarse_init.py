@@ -13,13 +13,14 @@ from caliball.algorithms.intrinsic_estimator import build_intrinsic_estimator
 
 
 class CoarseInit:
-    def __init__(self, robot, recognizer, tracker, pnp_solver, intrinsic_estimator=None):
+    def __init__(self, robot, recognizer, tracker, pnp_solver, intrinsic_estimator=None, moge_model_path=None):
         self.robot_tf = robot
         self.recognizer = recognizer
         self.point_tracker = tracker
         self.pnp_solver = pnp_solver
         self.intrinsic_estimator = intrinsic_estimator
         self._intrinsic = None
+        self._moge_model_path = moge_model_path
 
     def update_robot(self, robot):
         """Switch the FK model (does not reload DINOv2/CoTracker)."""
@@ -41,12 +42,12 @@ class CoarseInit:
     def _init_intrinsic(self, intrinsic=None):
         self._intrinsic = intrinsic
         if intrinsic is None and self.intrinsic_estimator is None:
-            self.intrinsic_estimator = build_intrinsic_estimator()
+            self.intrinsic_estimator = build_intrinsic_estimator(model_id=self._moge_model_path)
 
     def _get_intrinsic(self, img_pil):
         if self._intrinsic is None:
             if self.intrinsic_estimator is None:
-                self.intrinsic_estimator = build_intrinsic_estimator()
+                self.intrinsic_estimator = build_intrinsic_estimator(model_id=self._moge_model_path)
             self._intrinsic, origin_width, origin_height = self.intrinsic_estimator.estimate(img_pil=img_pil)
             width, height = img_pil.size
 
