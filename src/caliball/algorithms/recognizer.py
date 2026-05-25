@@ -26,6 +26,7 @@ class DINOv2Featurizer:
                 model_id,
                 source="local",
                 trust_repo=True,
+                pretrained=False,
             )
             ckpt = torch.load(
                 local_ckpt_path,
@@ -48,7 +49,6 @@ class DINOv2Featurizer:
     @torch.no_grad()
     def forward(self, img_tensor, block_index=None):
         feats_dict = self.model.get_intermediate_layers(img_tensor, n=1)
-        print(f"{feats_dict[0].shape=}")
         out = feats_dict[0]  # shape (B, num_tokens, C)
 
         B, N, C = out.shape

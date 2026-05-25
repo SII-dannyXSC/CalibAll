@@ -98,7 +98,9 @@ class DualArmSliceProcessor(StateProcessor):
         # 依赖 dict 插入顺序（Python 3.7+），与 LeRobotDataset.state_keys 顺序一致
         keys = list(columns.keys())
         left = columns[keys[0]][..., self._sl1].copy()
-        right = columns[keys[1]][..., self._sl2].copy()
+        # 如果只有一个 key，从同一列做第二个 slice
+        right_key = keys[1] if len(keys) > 1 else keys[0]
+        right = columns[right_key][..., self._sl2].copy()
         if self._offset is not None:
             left += self._offset
         if self._offset_2 is not None:

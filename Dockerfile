@@ -46,8 +46,7 @@ RUN mkdir -p third_party && cd third_party \
     && cd co-tracker && pip install -e . && cd .. \
     && git clone --depth 1 https://github.com/facebookresearch/sam3.git \
     && cd sam3 && pip install -e . && cd .. \
-    && git clone --depth 1 https://github.com/facebookresearch/dinov2 \
-    && git clone --depth 1 https://github.com/Daniella1/urdf_files_dataset.git urdf
+    && git clone --depth 1 https://github.com/facebookresearch/dinov2
 
 # Copy remaining files
 COPY scripts/ scripts/

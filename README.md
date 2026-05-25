@@ -26,6 +26,44 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 
 **Current Supported robots:** Franka Panda, UR5e, xArm7, ALOHA, with Robotiq 85, Panda Hand, and xArm Gripper.
 
+## Prerequisites
+
+Download model checkpoints into the `ckpt/` directory:
+
+```bash
+mkdir -p ckpt && cd ckpt
+
+# CoTracker (98 MB)
+mkdir -p cotracker && cd cotracker
+wget https://huggingface.co/facebook/cotracker3/resolve/main/scaled_offline.pth
+cd ..
+
+# DINOv2 (331 MB)
+mkdir -p dinov2 && cd dinov2
+wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth
+cd ..
+
+# SAM3 (6.5 GB)
+git clone https://huggingface.co/facebook/sam3
+
+cd ..
+```
+
+Expected structure:
+```
+ckpt/
+├── cotracker/
+│   └── scaled_offline.pth
+├── dinov2/
+│   └── dinov2_vitb14_pretrain.pth
+└── sam3/
+    ├── sam3.pt
+    ├── model.safetensors
+    ├── config.json
+    ├── tokenizer.json
+    └── ...
+```
+
 ## Installation
 
 ### Option A: Docker (Recommended)
@@ -96,23 +134,7 @@ cd sam3 && pip install -e . && cd ..
 # DINOv2 (feature extraction)
 git clone https://github.com/facebookresearch/dinov2
 
-# Robot URDF & mesh files
-git clone https://github.com/Daniella1/urdf_files_dataset.git urdf
-
 cd ..
-```
-
-#### 6. Download Checkpoints
-
-Place model checkpoints under `ckpt/`:
-```
-ckpt/
-├── dinov2/
-│   └── dinov2_vitb14_pretrain.pth
-├── cotracker/
-│   └── scaled_offline.pth
-└── sam3/
-    └── sam3.pt
 ```
 
 ## Quick Start

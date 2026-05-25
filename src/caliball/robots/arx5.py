@@ -138,7 +138,6 @@ class _Arx5ArmTF(BaseTF):
 # Dual-arm composite
 # ---------------------------------------------------------------------------
 
-@register_robot("arx5_robotwin")
 @register_robot("aloha_v1")
 class Arx5RobotwinTF(DualArmTF):
     """ARX5 dual-arm. q: (14,) = left arm 7 + right arm 7, order [left, right].

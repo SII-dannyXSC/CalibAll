@@ -31,7 +31,7 @@ class RoboticsToolBoxTF(BaseTF, ABC):
 
     def fkine_flange(self, q: np.ndarray) -> np.ndarray:
         """Arm end-effector pose, shape (1, 4, 4)."""
-        q = np.asarray(q, dtype=np.float64)
+        q = np.asarray(q, dtype=np.float64)[: self.robot.n]
         eef_pose = self.robot.fkine(q, end=self.tcp_name).A
         return eef_pose[np.newaxis]  # (1, 4, 4)
 
@@ -41,7 +41,7 @@ class RoboticsToolBoxTF(BaseTF, ABC):
 
     def fkine_all(self, q: np.ndarray) -> np.ndarray:
         """All link transforms (with mesh alignment), shape (1, n_links, 4, 4)."""
-        q = np.asarray(q, dtype=np.float64)
+        q = np.asarray(q, dtype=np.float64)[: self.robot.n]
         all_tf = [self.robot.fkine(q, end=name).A for name in self.name_list]
         result = np.array(all_tf)[np.newaxis]  # (1, n_links, 4, 4)
         # Apply mesh alignment if available
