@@ -171,6 +171,8 @@ Optional flags:
 python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
 ```
 
+> **Note:** The first pipeline run will be slower due to CoTracker JIT compilation and model initialization. Subsequent runs in the same session are much faster.
+
 ## Project Structure
 
 ```
