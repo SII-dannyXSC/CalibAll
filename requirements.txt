@@ -21,3 +21,4 @@ debugpy
 decord
 pycollada
 imageio[ffmpeg]
+flask
