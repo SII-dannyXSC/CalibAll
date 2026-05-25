@@ -63,6 +63,9 @@ cd ..
 mkdir -p sam3
 modelscope download --model facebook/sam3 --local_dir ./sam3
 # Alternative: git clone https://huggingface.co/facebook/sam3
+
+# MoGe (intrinsic estimation, ~1.2 GB)
+hf download Ruicheng/moge-2-vitl-normal --local-dir ./moge
 ```
 
 Expected structure:
@@ -72,6 +75,8 @@ ckpt/
 │   └── scaled_offline.pth
 ├── dinov2/
 │   └── dinov2_vitb14_pretrain.pth
+├── moge/
+│   └── (HuggingFace model files)
 └── sam3/
     ├── sam3.pt
     ├── model.safetensors

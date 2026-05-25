@@ -1,11 +1,16 @@
 """Monocular intrinsic-parameter estimation (MoGe)."""
 
+import os
 import torch
 from PIL import Image
 from torchvision import transforms as TF
 import numpy as np
 import cv2
 from moge.model.v2 import MoGeModel
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_DEFAULT_LOCAL_PATH = os.path.join(_PROJECT_ROOT, "ckpt", "moge")
+_DEFAULT_HF_ID = "Ruicheng/moge-2-vitl-normal"
 
 
 def preprocess_images(img_pil, mode="crop"):
@@ -73,8 +78,11 @@ def preprocess_images(img_pil, mode="crop"):
 
 
 class MoGeEstimator:
-    def __init__(self, model_id="Ruicheng/moge-2-vitl-normal", device=None):
+    def __init__(self, model_id=None, device=None):
         self.device = device
+        # Local path first, then HF Hub
+        if model_id is None:
+            model_id = _DEFAULT_LOCAL_PATH if os.path.isdir(_DEFAULT_LOCAL_PATH) else _DEFAULT_HF_ID
         self.moge = MoGeModel.from_pretrained(model_id)
 
         if device is not None:
@@ -93,5 +101,5 @@ class MoGeEstimator:
         return intrinsic, 1.0, 1.0
 
 
-def build_intrinsic_estimator(model_id="Ruicheng/moge-2-vitl-normal"):
+def build_intrinsic_estimator(model_id=None):
     return MoGeEstimator(model_id=model_id)
