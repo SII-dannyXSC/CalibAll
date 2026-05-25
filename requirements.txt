@@ -17,4 +17,5 @@ trimesh
 typing-extensions
 pycollada
 imageio[ffmpeg]
+av
 flask

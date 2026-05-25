@@ -73,26 +73,25 @@ def decode_video_frames(
     backend: str = "pyav",
 ) -> np.ndarray:
     """解码指定时间戳的视频帧，返回 (T, H, W, 3) uint8 numpy 数组。"""
-    torchvision.set_video_backend(backend)
-    reader = torchvision.io.VideoReader(str(video_path), "video")
+    import av
+
+    container = av.open(str(video_path))
+    stream = container.streams.video[0]
+    stream.codec_context.thread_type = "AUTO"
 
     timestamps = [float(t) for t in timestamps]
     first_ts, last_ts = min(timestamps), max(timestamps)
-    reader.seek(first_ts, keyframes_only=(backend == "pyav"))
 
     loaded_frames, loaded_ts = [], []
-    for frame in reader:
-        current_ts = float(frame["pts"])
-        loaded_frames.append(frame["data"])
+    for frame in container.decode(stream):
+        current_ts = float(frame.pts * stream.time_base)
+        if current_ts < first_ts - tolerance_s:
+            continue
+        loaded_frames.append(frame.to_ndarray(format="rgb24"))
         loaded_ts.append(current_ts)
         if current_ts >= last_ts:
             break
-
-    if backend == "pyav":
-        try:
-            reader.container.close()
-        except Exception:
-            pass
+    container.close()
 
     query_ts = torch.as_tensor(timestamps, dtype=torch.float64)
     loaded_ts_t = torch.as_tensor(loaded_ts, dtype=torch.float64)
@@ -104,9 +103,5 @@ def decode_video_frames(
         f"video: {video_path}"
     )
 
-    frames = torch.stack([loaded_frames[idx] for idx in argmin_])
-    # (T, C, H, W) float → (T, H, W, C) uint8
-    arr = frames.permute(0, 2, 3, 1).numpy()
-    if arr.dtype != np.uint8:
-        arr = (arr.astype(np.float32) * 255).clip(0, 255).astype(np.uint8)
-    return arr
+    frames = np.stack([loaded_frames[idx] for idx in argmin_])
+    return frames
