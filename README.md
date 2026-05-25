@@ -26,6 +26,8 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 
 **Current Supported robots:** Franka Panda, UR5e, xArm7, ALOHA, with Robotiq 85, Panda Hand, and xArm Gripper.
 
+**Dataset format:** [LeRobot 2.1](https://github.com/huggingface/lerobot)
+
 ## Roadmap
 
 | Status | Feature |
@@ -92,11 +94,9 @@ hf download dannyXSC/Caliball_demo --repo-type dataset --local-dir data/demo
 ```bash
 conda create -n caliball python=3.12 -y
 conda activate caliball
-conda install ffmpeg -y
 ```
 
 #### 2. Install PyTorch (CUDA 12.8)
-
 ```bash
 pip install torch==2.9.0 torchvision==0.24.0 torchaudio==2.9.0 --index-url https://download.pytorch.org/whl/cu128
 ```
