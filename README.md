@@ -26,6 +26,16 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 
 **Current Supported robots:** Franka Panda, UR5e, xArm7, ALOHA, with Robotiq 85, Panda Hand, and xArm Gripper.
 
+## Roadmap
+
+- [x] Web-based interactive calibration pipeline
+- [x] Franka Panda (+ Robotiq 85 / Panda Hand)
+- [x] UR5e (+ Robotiq 85)
+- [x] xArm7 (+ xArm Gripper)
+- [x] ALOHA / ARX5 dual-arm
+- [ ] Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose)
+- [ ] More robot embodiments
+
 ## Prerequisites
 
 Download model checkpoints into the `ckpt/` directory:
