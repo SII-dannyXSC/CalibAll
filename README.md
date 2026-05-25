@@ -77,7 +77,13 @@ ckpt/
     └── ...
 ```
 
+### Download Demo Data
 
+Download demo data:
+```bash
+pip install huggingface_hub
+hf download dannyXSC/Caliball_demo --repo-type dataset --local-dir data/demo
+```
 
 ## Installation
 
@@ -138,12 +144,6 @@ cd ..
 ```
 
 ## Quick Start
-
-Download demo data:
-```bash
-pip install huggingface_hub[cli]
-huggingface-cli download dannyXSC/Caliball_demo --repo-type dataset --local-dir data/demo
-```
 
 ### Web UI (Recommended)
 
