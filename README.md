@@ -57,10 +57,9 @@ wget https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.
 cd ..
 
 # SAM3 (6.5 GB) — from ModelScope (recommended) or Hugging Face
-git clone https://www.modelscope.cn/models/facebook/sam3.git
+mkdir -p sam3
+modelscope download --model facebook/sam3 --local_dir ./sam3
 # Alternative: git clone https://huggingface.co/facebook/sam3
-
-cd ..
 ```
 
 Expected structure:
@@ -77,6 +76,8 @@ ckpt/
     ├── tokenizer.json
     └── ...
 ```
+
+
 
 ## Installation
 
@@ -137,6 +138,11 @@ cd ..
 ```
 
 ## Quick Start
+
+Download demo data:
+```bash
+huggingface-cli download dannyXSC/Caliball_demo --repo-type dataset --local-dir data/demo
+```
 
 ### Web UI (Recommended)
 
