@@ -28,13 +28,15 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 
 ## Roadmap
 
-- [x] Web-based interactive calibration pipeline
-- [x] Franka Panda (+ Robotiq 85 / Panda Hand)
-- [x] UR5e (+ Robotiq 85)
-- [x] xArm7 (+ xArm Gripper)
-- [x] ALOHA / ARX5 dual-arm
-- [ ] Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose)
-- [ ] More robot embodiments
+| Status | Feature |
+|:------:|---------|
+| ✅ | Web-based interactive calibration pipeline |
+| ✅ | Franka Panda (+ Robotiq 85 / Panda Hand) |
+| ✅ | UR5e (+ Robotiq 85) |
+| ✅ | xArm7 (+ xArm Gripper) |
+| ✅ | ALOHA / ARX5 dual-arm |
+| ⬜ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
+| ⬜ | More robot embodiments |
 
 ## Prerequisites
 
