@@ -36,6 +36,7 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 | ✅ | xArm7 (+ xArm Gripper) |
 | ✅ | ALOHA / ARX5 dual-arm |
 | ⬜ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
+| ⬜ | Docker support |
 | ⬜ | More robot embodiments |
 
 ## Prerequisites
@@ -77,21 +78,6 @@ ckpt/
 ```
 
 ## Installation
-
-### Option A: Docker (Recommended)
-
-```bash
-# Build
-docker build -t caliball .
-
-# Run Web UI (mount checkpoints and data)
-docker run --gpus all -p 8765:8765 \
-    -v /path/to/ckpt:/workspace/CalibAll/ckpt \
-    -v /path/to/data:/workspace/CalibAll/data \
-    caliball
-```
-
-### Option B: Conda
 
 #### 1. Create Environment
 
