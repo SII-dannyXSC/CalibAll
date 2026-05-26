@@ -18,6 +18,8 @@
 
 <sup>&dagger;</sup> Corresponding authors
 
+<video src="assets/demo.mp4" controls width="100%"><video>
+
 </div>
 
 ## About
@@ -151,8 +153,8 @@ cd ..
 
 ## Quick Start
 
-### Web UI (Recommended)
-
+### Web UI
+<video src="assets/usage.mp4" controls width="100%"><video>
 Launch the interactive calibration interface:
 
 ```bash
