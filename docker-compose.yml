@@ -1,0 +1,52 @@
+services:
+  caliball:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: caliball:cuda12.8
+    # Skip the implicit `docker pull` against docker.io (which is blocked on
+    # this host). Compose will use the locally-built image / fall back to
+    # `docker compose build`.
+    pull_policy: build
+    container_name: caliball
+    working_dir: /workspace/CalibAll
+    ports:
+      - "8765:8765"
+    volumes:
+      # Live source for development.
+      - .:/workspace/CalibAll
+      # Anonymous volumes mask the bind-mount above so the image-built
+      # `third_party/` (co-tracker, sam3, dinov2) and editable-install
+      # metadata are not hidden by the host's (possibly empty) directories.
+      - /workspace/CalibAll/third_party
+      - /workspace/CalibAll/src/caliball.egg-info
+      # Named volumes persist heavy caches across rebuilds.
+      - hf_cache:/workspace/.cache/huggingface
+      - torch_ext:/workspace/.torch_extensions
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics
+      PYTHONUNBUFFERED: "1"
+      HF_HOME: /workspace/.cache/huggingface
+      HUGGINGFACE_HUB_CACHE: /workspace/.cache/huggingface/hub
+      TORCH_EXTENSIONS_DIR: /workspace/.torch_extensions
+    # GPU access (Docker Compose v2 syntax).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    gpus: all
+    shm_size: "32gb"
+    ipc: host
+    stdin_open: true
+    tty: true
+    # Default: launch the interactive Web UI on 0.0.0.0:8765.
+    # Override with `docker compose run --rm caliball bash` for a shell.
+    command: ["python", "scripts/caliball_web.py", "--host", "0.0.0.0", "--port", "8765"]
+
+volumes:
+  hf_cache:
+  torch_ext:

@@ -1,0 +1,37 @@
+# VCS / IDE / caches
+.git
+.gitignore
+.dockerignore
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.pyre
+__pycache__
+*.py[cod]
+*.so
+*.egg-info
+
+# Python envs
+.venv
+.venv*
+env
+venv
+
+# Heavy runtime artefacts — these come in via bind mounts at run time.
+ckpt
+data
+results
+result
+label_out
+manual_label
+extrinsic_detection_web
+visualized_videos
+output_videos
+tmp
+
+# Third-party repos are cloned inside the image; keep URDF assets only.
+third_party/*
+!third_party/urdf/
+
+# Docker / CI artefacts
+**/.DS_Store
