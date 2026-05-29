@@ -3,11 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: caliball:cuda12.8
-    # Skip the implicit `docker pull` against docker.io (which is blocked on
-    # this host). Compose will use the locally-built image / fall back to
-    # `docker compose build`.
-    pull_policy: build
+    # Pre-built image published by GitHub Actions to GHCR.
+    # Fallback: `docker compose build` if pull is unavailable.
+    image: ghcr.io/sii-dannyxsc/caliball:cuda12.8
+    pull_policy: missing
     container_name: caliball
     working_dir: /workspace/CalibAll
     ports:
@@ -30,6 +29,7 @@ services:
       HF_HOME: /workspace/.cache/huggingface
       HUGGINGFACE_HUB_CACHE: /workspace/.cache/huggingface/hub
       TORCH_EXTENSIONS_DIR: /workspace/.torch_extensions
+      HF_ENDPOINT: https://hf-mirror.com
     # GPU access (Docker Compose v2 syntax).
     deploy:
       resources:

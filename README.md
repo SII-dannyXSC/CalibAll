@@ -44,7 +44,7 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 | ✅ | xArm7 (+ xArm Gripper) |
 | ✅ | ALOHA / ARX5 dual-arm |
 | ⬜ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
-| ⬜ | Docker support |
+| ✅ | Docker support |
 | ⬜ | More dataset formats |
 | ⬜ | More robot embodiments |
 
@@ -155,6 +155,59 @@ git clone https://github.com/facebookresearch/dinov2
 cd ..
 ```
 
+### Docker (Recommended)
+
+Requires [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (GPU passthrough).
+
+#### Option A — Pull pre-built image (fastest)
+
+Pre-built images are published to GitHub Container Registry:
+
+```bash
+git clone https://github.com/SII-dannyXSC/CalibAll.git
+cd CalibAll
+
+# Pull from GHCR (requires the package to be public, or `docker login ghcr.io`)
+docker compose pull
+docker compose up -d --no-build
+```
+
+Image: `ghcr.io/sii-dannyxsc/caliball:cuda12.8`
+
+> After the first GitHub Actions publish, make the package **public** under  
+> GitHub → Packages → caliball → Package settings → Change visibility.
+
+#### Option B — Build locally (~1 hour first time)
+
+```bash
+git clone https://github.com/SII-dannyXSC/CalibAll.git
+cd CalibAll
+docker compose build
+docker compose up -d --no-build
+```
+
+#### Usage
+
+Open `http://127.0.0.1:8765` in your browser.
+
+```bash
+# View logs
+docker compose logs -f
+
+# Shell inside the container
+docker compose exec caliball bash
+
+# Health check
+docker compose exec caliball bash scripts/docker_setup_env.sh
+
+# Stop
+docker compose down
+```
+
+Checkpoints (`ckpt/`) and datasets (`data/`) are bind-mounted from the host — download them on the host as described in [Prerequisites](#prerequisites), and the container will see them immediately.
+
+> **Note:** The first pipeline run takes ~10 minutes due to nvdiffrast CUDA kernel compilation. Compiled kernels are cached in the `torch_ext` volume across restarts.
+
 ## Quick Start
 
 ### Web UI
@@ -198,10 +251,13 @@ CalibAll/
 │   ├── utils/           # Video I/O, visualization, mesh loading
 │   └── web/             # Flask web app (routes, services, templates)
 ├── scripts/
-│   ├── caliball_web.py  # Web UI entry point
-│   ├── label.py         # Batch labeling pipeline
-│   ├── visualize.py     # Result visualization
+│   ├── caliball_web.py      # Web UI entry point
+│   ├── docker_setup_env.sh  # Container health check / dependency repair
+│   ├── label.py             # Batch labeling pipeline
+│   ├── visualize.py         # Result visualization
 │   └── check_robot_urdf.py  # Robot mesh verification
+├── Dockerfile               # CUDA 12.8 dev image
+├── docker-compose.yml       # Web UI service (GPU, ports, volumes)
 ├── third_party/         # Co-Tracker, SAM3, DINOv2, nvdiffrast, URDF
 ├── ckpt/                # Model checkpoints
 └── assets/              # Images and demos
