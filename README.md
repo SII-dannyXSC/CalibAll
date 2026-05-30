@@ -174,8 +174,13 @@ docker compose up -d --no-build
 
 Image: `ghcr.io/sii-dannyxsc/caliball:cuda12.8`
 
-> After the first GitHub Actions publish, make the package **public** under  
-> GitHub → Packages → caliball → Package settings → Change visibility.
+> The image bundles all code and dependencies, but **not** the model
+> checkpoints — download them into `ckpt/` as described in
+> [Prerequisites](#prerequisites). They are mounted into the container at runtime.
+>
+> If `docker compose pull` returns `unauthorized`, the package is still private:
+> make it public under GitHub → Packages → caliball → Package settings →
+> Change visibility, or run `docker login ghcr.io` first.
 
 #### Option B — Build locally (~1 hour first time)
 
@@ -205,8 +210,6 @@ docker compose down
 ```
 
 Checkpoints (`ckpt/`) and datasets (`data/`) are bind-mounted from the host — download them on the host as described in [Prerequisites](#prerequisites), and the container will see them immediately.
-
-> **Note:** The first pipeline run takes ~10 minutes due to nvdiffrast CUDA kernel compilation. Compiled kernels are cached in the `torch_ext` volume across restarts.
 
 ## Quick Start
 

@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Pre-built image published by GitHub Actions to GHCR.
-    # Fallback: `docker compose build` if pull is unavailable.
+    # Pre-built image on GitHub Container Registry. `pull_policy: missing` pulls
+    # it on first run if absent; otherwise `docker compose build` rebuilds.
     image: ghcr.io/sii-dannyxsc/caliball:cuda12.8
     pull_policy: missing
     container_name: caliball

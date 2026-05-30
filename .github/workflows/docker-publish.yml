@@ -20,6 +20,18 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      # Default runners only have ~14 GB free; this image is ~20 GB, so reclaim
+      # space by removing preinstalled toolchains we don't need.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
       - name: Checkout
         uses: actions/checkout@v4
 
