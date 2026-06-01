@@ -1,0 +1,21 @@
+# 本地 demo ALOHA LeRobot 数据：data/demo/aloha_lerobot
+calib_dataset_name: rdt
+robot_type: aloha_v1
+dataset_name: aloha_lerobot
+base_path: /home/xiesicheng/project/CalibAll/data/demo
+
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state
+
+tf:
+  grasp_point_rotation_align: [0.0, 90.0, 0.0]   # euler_xyz 角度（度），右乘到 rot_cam；[0,0,0] = 不对齐
+
+label:
+  output_dir: ./label_out/aloha/${dataset_name}
+  calib_dataset_name: ${calib_dataset_name}
+  camera_names:
+    - observation.images.main
+  eef_rotation_type: euler_xyz
+  arm_mesh_num: 7   # per-arm: base_link+link1-6 = 7 arm body, link7-8 = gripper

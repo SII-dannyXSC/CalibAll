@@ -65,7 +65,16 @@ class CoarseInit:
         points_2d, pred_tracks, pred_visibility = self.point_tracker.track(video=video, uv=(u, v), img_idx=img_idx)
 
         if save_path is not None:
-            self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
+            try:
+                self.point_tracker.visualize(
+                    video, pred_tracks=pred_tracks, pred_visibility=pred_visibility,
+                    path=os.path.join(save_path, "tracking"),
+                )
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "tracking video save failed (pipeline continues): %s", exc,
+                )
 
         _report("solving PnP …")
         K = self._get_intrinsic(img_pil)

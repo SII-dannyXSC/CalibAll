@@ -69,6 +69,37 @@ def parse_args():
     return p.parse_args()
 
 
+def _lerobot_source(dataset):
+    """Return source root/chunk info for supported LeRobot dataset wrappers."""
+    if hasattr(dataset, "lerobot_ds"):
+        orig_root = Path(dataset.lerobot_ds.root)
+        chunks_size = dataset.lerobot_ds.meta.chunks_size
+        get_data_file_path = dataset.lerobot_ds.meta.get_data_file_path
+        return orig_root, chunks_size, get_data_file_path
+
+    if hasattr(dataset, "_dataset_path"):
+        orig_root = Path(dataset._dataset_path)
+        chunks_size = int(getattr(dataset, "_chunks_size", 1000))
+        data_path_pattern = getattr(
+            dataset,
+            "_data_path_pattern",
+            "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+        )
+
+        def get_data_file_path(ep_idx: int) -> str:
+            return data_path_pattern.format(
+                episode_chunk=ep_idx // chunks_size,
+                episode_index=ep_idx,
+            )
+
+        return orig_root, chunks_size, get_data_file_path
+
+    raise TypeError(
+        "lerobot 模式需要 dataset 提供 lerobot_ds，或 caliball LeRobotDataset 的 "
+        "_dataset_path/_chunks_size/_data_path_pattern"
+    )
+
+
 def main():
     args = parse_args()
     cfg = compose_job_config_from_path(args.config, project_root=_PROJECT_ROOT)
@@ -143,9 +174,8 @@ def main():
     # Init writer (lerobot mode)
     writer = None
     if args.format == "lerobot":
-        orig_root = Path(dataset.lerobot_ds.root)
-        chunks_size = dataset.lerobot_ds.meta.chunks_size
-        sample_pq_path = orig_root / dataset.lerobot_ds.meta.get_data_file_path(0)
+        orig_root, chunks_size, get_data_file_path = _lerobot_source(dataset)
+        sample_pq_path = orig_root / get_data_file_path(ep_start)
         orig_schema = pq.read_schema(sample_pq_path)
         align_cols_present = [c for c in ALIGN_COLS if c in orig_schema.names]
         orig_copy_cols = (
@@ -238,7 +268,7 @@ def main():
         # Write output
         if args.format == "lerobot":
             align_table = pq.read_table(
-                orig_root / dataset.lerobot_ds.meta.get_data_file_path(ep_idx),
+                orig_root / get_data_file_path(ep_idx),
                 columns=orig_copy_cols,
             )
             writer.write_episode(ep_idx, align_table, label_data.to_columns())

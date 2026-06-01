@@ -43,7 +43,7 @@ CalibAll is a training-free, robot-independent pipeline for **camera extrinsic c
 | ✅ | UR5e (+ Robotiq 85) |
 | ✅ | xArm7 (+ xArm Gripper) |
 | ✅ | ALOHA / ARX5 dual-arm |
-| ⬜ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
+| ✅ | Automatic annotation pipeline (bbox, mask, keypoints, TCP-pose) |
 | ✅ | Docker support |
 | ⬜ | More dataset formats |
 | ⬜ | More robot embodiments |
@@ -157,7 +157,7 @@ cd ..
 
 ### Docker (Recommended)
 
-Requires [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (GPU passthrough).
+Requires [Docker](https://docs.docker.com/get-docker/) and the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) (GPU passthrough). No host-side CUDA toolkit is needed — the image ships its own CUDA 12.8 runtime — but the host **NVIDIA driver must support CUDA 12.8** (driver ≥ 570; check the `CUDA Version` shown by `nvidia-smi`).
 
 #### Option A — Pull pre-built image (fastest)
 
@@ -235,7 +235,141 @@ Optional flags:
 python scripts/caliball_web.py --host 0.0.0.0 --port 8765 --device cuda
 ```
 
-> **Note:** The first pipeline run takes ~10 minutes due to nvdiffrast CUDA kernel compilation. This only happens once — subsequent runs in the same session are fast.
+
+### Writing Dataset Configs
+
+Task configs live in `src/caliball/config/`. A config connects four things: the LeRobot dataset path, the robot FK model, the calibration entry, and the annotation options.
+
+Before labeling, save the calibration YAML downloaded from the Web UI into `src/caliball/config/calibration/`. The task config must set `calib_dataset_name` to the calibration YAML's `dataset` value, or to one of its `aliases`.
+
+Full example:
+
+```yaml
+# Calibration lookup key. This must match a calibration YAML under
+# src/caliball/config/calibration/ via its `dataset` or `aliases`.
+calib_dataset_name: rdt
+
+# Robot FK / mesh model from caliball.robots registry.
+robot_type: aloha_v1
+
+# Local LeRobot dataset path = ${base_path}/${dataset_name}.
+dataset_name: aloha_lerobot
+base_path: /path/to/data/demo
+
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+
+  # Parquet columns used as robot joint states.
+  state_keys: observation.state
+
+  # Optional: decode only selected video streams.
+  # decode_video_keys:
+  #   - observation.images.main
+
+tf:
+  # Optional Euler XYZ angle offset, in degrees, applied to output TCP rotation.
+  grasp_point_rotation_align: [0.0, 90.0, 0.0]
+  # Optional fixed gripper mounting yaw offset around the flange Z axis.
+  gripper_mount_yaw_deg: 0.0
+
+label:
+  output_dir: ./label_out/aloha/${dataset_name}
+  calib_dataset_name: ${calib_dataset_name}
+
+  # Video feature names to annotate. They must exist in meta/info.json.
+  camera_names:
+    - observation.images.main
+
+  eef_rotation_type: euler_xyz
+
+  # Number of meshes per arm treated as the arm body; remaining meshes are gripper.
+  arm_mesh_num: 7
+
+  # Optional labeling range and runtime options.
+  episode_start: 0
+  max_episodes: 1
+  skip_mask: false
+  device: cuda
+```
+
+Important fields:
+
+- `calib_dataset_name`: key used to look up intrinsics/extrinsics from `src/caliball/config/calibration/*.yaml`. It must match either `dataset` or an entry in `aliases` from the calibration YAML exported by the Web UI.
+- `robot_type`: robot FK and mesh model from the registry. Print available names with `python -c "from caliball.robots import list_robots; print(list_robots())"`.
+- `base_path` and `dataset_name`: combined into `dataset.repo_id`, the local LeRobot dataset directory.
+- `dataset.state_keys`: parquet columns used as joint states. Use names from the dataset `meta/info.json` features, for example `observation.state`.
+- `tf.grasp_point_rotation_align`: optional Euler XYZ angle offset, in degrees, right-multiplied to the output grasp/TCP rotation.
+- `tf.gripper_mount_yaw_deg`: optional fixed yaw offset for grippers mounted with a Z-axis rotation relative to the arm flange.
+- `label.camera_names`: video feature names to annotate. They must exist in `meta/info.json`.
+- `label.arm_mesh_num`: number of per-arm meshes treated as arm body; remaining meshes are treated as gripper meshes for separated masks and boxes.
+
+For a new dataset, first check `meta/info.json` for `state_keys` and camera names, then run a small smoke test:
+
+```bash
+python scripts/label.py \
+  --config src/caliball/config/demo_aloha.yaml \
+  --format json \
+  --max_episodes 1 \
+  --skip_mask
+```
+
+If the smoke test passes, remove `--skip_mask` to render full masks.
+
+### Batch Labeling and Visualization
+
+After calibration YAMLs are available under `src/caliball/config/calibration/`, use `scripts/label.py` to generate automatic annotations from a dataset config. The script supports two output formats:
+
+- `json`: episode JSON files plus pickled `LabelData`.
+- `lerobot`: a LeRobot-style dataset with annotation columns in parquet, copied meta files, and video symlinks.
+
+Example with the local ALOHA demo dataset:
+
+```bash
+# JSON annotations
+python scripts/label.py \
+  --config src/caliball/config/demo_aloha.yaml \
+  --format json \
+  --max_episodes 1
+```
+
+```bash
+# LeRobot annotations
+python scripts/label.py \
+  --config src/caliball/config/demo_aloha.yaml \
+  --format lerobot \
+  --max_episodes 1
+```
+
+For quick geometry checks without rendering masks, add `--skip_mask`. This only writes TCP pose, keypoint, and bbox-related fields that do not require mesh rasterization.
+
+Visualize JSON annotations:
+
+```bash
+python scripts/visualize.py \
+  --json_dir ./label_out/aloha/aloha_lerobot \
+  --task_path ./data/demo/aloha_lerobot \
+  --cameras observation.images.main \
+  --output_dir ./label_out/aloha/aloha_lerobot_json_vis \
+  --fps 30
+```
+
+Visualize LeRobot annotations:
+
+```bash
+python scripts/visualize.py \
+  --input_format lerobot \
+  --dataset_dir ./label_out/aloha/aloha_lerobot \
+  --output_dir ./label_out/aloha/aloha_lerobot_vis \
+  --episodes 0 \
+  --fps 30
+```
+
+Useful visualization flags:
+
+- `--first_frame_only`: export still images instead of a full video in JSON mode.
+- `--no_mask`, `--no_bbox`, `--no_point`, `--no_axes`: hide selected overlays.
+- `--alpha`: adjust mask opacity.
 
 ## Project Structure
 
