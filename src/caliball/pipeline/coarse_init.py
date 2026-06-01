@@ -51,18 +51,23 @@ class CoarseInit:
 
     def get_extrinsic(self, video, joint_angles, tracking_point=None, img_idx=0,
                       method=cv2.SOLVEPNP_EPNP, save_path=None, init_w2c=None,
-                      return_details=False, arm_index=0):
+                      return_details=False, arm_index=0, progress_fn=None):
+        _report = progress_fn or (lambda msg: None)
+
         img_pil = Image.fromarray(video[img_idx])
 
         if tracking_point is not None:
             u, v = tracking_point
         else:
             u, v = self.recognizer.get_uv(target_img_pil=img_pil)
+
+        _report("tracking points …")
         points_2d, pred_tracks, pred_visibility = self.point_tracker.track(video=video, uv=(u, v), img_idx=img_idx)
 
         if save_path is not None:
             self.point_tracker.visualize(video, pred_tracks=pred_tracks, pred_visibility=pred_visibility, path=os.path.join(save_path, "tracking"))
 
+        _report("solving PnP …")
         K = self._get_intrinsic(img_pil)
         hom = np.array([self.robot_tf.fkine_flange(q)[0] for q in joint_angles])  # (T, 4, 4) or (T, 2, 4, 4)
         if hom.ndim == 4:
