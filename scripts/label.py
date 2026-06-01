@@ -31,6 +31,7 @@ from pathlib import Path
 
 import numpy as np
 from omegaconf import OmegaConf
+import pyarrow.parquet as pq
 from tqdm import tqdm
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent

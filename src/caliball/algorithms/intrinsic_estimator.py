@@ -81,7 +81,8 @@ class MoGeEstimator:
     def __init__(self, model_id=None, device=None):
         self.device = device
         if model_id is None:
-            model_id = _DEFAULT_HF_ID
+            local_ckpt = os.path.join(_DEFAULT_LOCAL_PATH, "model.pt")
+            model_id = local_ckpt if os.path.exists(local_ckpt) else _DEFAULT_HF_ID
         self.moge = MoGeModel.from_pretrained(model_id)
 
         if device is not None:

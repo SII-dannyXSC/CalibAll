@@ -96,12 +96,14 @@ def _load_models(device, robot_type, sam_bpe_path, sam_ckpt_path, update_fn=None
     model_config = OmegaConf.load(str(_PROJECT_ROOT / "src" / "caliball" / "config" / "models.yaml"))
     model_config.robot_type = robot_type
 
-    _up("Loading CoarseInit (DINOv2 + CoTracker)...", 20)
+    _up("Loading CoarseInit (DINOv2 + CoTracker + MoGe)...", 20)
+    from caliball.algorithms.intrinsic_estimator import build_intrinsic_estimator
     robot = build_robot(robot_type)
     recognizer = Recognizer(build_feature_extractor(model_config))
     tracker = build_tracker(model_config)
-    moge_path = str(_PROJECT_ROOT / model_config.get("moge_model_path", "ckpt/moge"))
-    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp, moge_model_path=moge_path)
+    moge_path = str(_PROJECT_ROOT / model_config.get("moge_model_path", "ckpt/moge/model.pt"))
+    intrinsic_estimator = build_intrinsic_estimator(model_id=moge_path)
+    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp, intrinsic_estimator=intrinsic_estimator)
     coarse_init.to(device)
 
     _up("Loading Refinement...", 50)
@@ -186,11 +188,13 @@ def _run_from_config(args, result_dir, manual_label_dir):
     model_config.robot_type = robot_type
 
     print("[loading] CoarseInit...")
+    from caliball.algorithms.intrinsic_estimator import build_intrinsic_estimator
     robot = build_robot(robot_type)
     recognizer = Recognizer(build_feature_extractor(model_config))
     tracker = build_tracker(model_config)
-    moge_path = str(_PROJECT_ROOT / model_config.get("moge_model_path", "ckpt/moge"))
-    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp, moge_model_path=moge_path)
+    moge_path = str(_PROJECT_ROOT / model_config.get("moge_model_path", "ckpt/moge/model.pt"))
+    intrinsic_estimator = build_intrinsic_estimator(model_id=moge_path)
+    coarse_init = CoarseInit(robot, recognizer, tracker, solve_pnp, intrinsic_estimator=intrinsic_estimator)
     coarse_init.to(args.device)
     print("[loading] Refinement...")
     refinement = Refinement(robot, None, robot.MESH_PATHS, device=args.device)

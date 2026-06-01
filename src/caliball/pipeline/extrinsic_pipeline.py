@@ -81,11 +81,15 @@ class ExtrinsicPipeline:
         # tracking 只用 clip 中对应 start:end 范围的帧
         track_clip = clip[tracking_img_idx:]  # 从 tracking point 帧开始到 clip 末尾
         track_joints = joint_angles[tracking_img_idx:]
+
+        def _coarse_progress(msg):
+            _report("tracking", msg)
+
         extrinsic, K, details = self._coarse.get_extrinsic(
             video=track_clip, joint_angles=track_joints,
             tracking_point=list(tracking_point), img_idx=0,
             save_path=str(save_dir), return_details=True,
-            arm_index=arm_index,
+            arm_index=arm_index, progress_fn=_coarse_progress,
         )
 
         # Tracking visualization
