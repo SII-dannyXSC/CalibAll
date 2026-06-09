@@ -119,6 +119,8 @@ body{font-family:system-ui;max-width:1100px;margin:0 auto;padding:1rem}
 <button id=reconfig-btn style='display:none;margin:16px auto;padding:10px 32px;font-size:16px;cursor:pointer;background:#f80;color:#fff;border:none;border-radius:6px' onclick=reconfig()>Change Dataset</button>
 <!-- JavaScript -->
 <script>
+var APP_BASE = new URL('.', window.location.href);
+function appUrl(path){return new URL(path, APP_BASE).toString();}
 var T={{ thumbs | tojson }};
 var S={s:{{ default_start }},e:{{ default_end }},ms:{{ mask_refs | tojson }},curMI:0,tx:{{ tracking_x }},ty:{{ tracking_y }},fm:'start',fa:false,ta:{{ has_default_tracking | tojson }},ma:{{ has_default_masks | tojson }}};
 var HDT={{ has_default_tracking | tojson }},HDM={{ has_default_masks | tojson }},HP={{ has_pipeline | tojson }};
@@ -172,7 +174,7 @@ c.appendChild(b);});}
 function switchMask(idx){
 S.curMI=idx;
 renderMTabs();
-fetch('/api/sam/switch_frame',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/sam/switch_frame'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:S.ms[idx]})});}
 /* Toggle */
 function tog(w){
@@ -197,7 +199,7 @@ dot.style.top=(S.ty*img.clientHeight/img.naturalHeight)+'px';
 dot.style.display='block';}
 /* Update tracking image */
 function upTImg(){
-fetch('/api/frame/'+S.s).then(function(r){return r.json()}).then(function(d){
+fetch(appUrl('api/frame/'+S.s)).then(function(r){return r.json()}).then(function(d){
 var img=document.getElementById('timg');
 img.onload=function(){upDot()};img.src=d.url;});}
 /* SAM click */
@@ -207,17 +209,17 @@ if(ev.button!==0&&ev.button!==2)return;
 var img=document.getElementById('mimg');
 var r=img.getBoundingClientRect();
 var sx=img.naturalWidth/img.clientWidth,sy=img.naturalHeight/img.clientHeight;
-fetch('/api/sam/click',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/sam/click'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({x:(ev.clientX-r.left)*sx,y:(ev.clientY-r.top)*sy,
 label:ev.button===2?0:1,fi:S.ms[S.curMI]})});};
 /* SAM undo */
 function samUndo(){
-fetch('/api/sam/undo',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/sam/undo'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:S.ms[S.curMI]})});}
 /* Poll SAM */
 function pollSam(){
 if(S.ma)return;
-fetch('/api/sam/state').then(function(r){return r.json()}).then(function(d){
+fetch(appUrl('api/sam/state')).then(function(r){return r.json()}).then(function(d){
 document.getElementById('mimg').src=d.overlay;
 document.getElementById('ms').textContent=d.status;
 samPtsMap[S.ms[S.curMI]]=samPtsMap[S.ms[S.curMI]]===-1?-1:(d.pts||0);renderMTabs();upInfo();});}
@@ -234,14 +236,14 @@ S.ma?'Mask: using default ('+S.ms.length+' frames)':'Mask: SAM '+S.ms.length+' f
 /* Dataset switch */
 function switchDs(){
 var sel=document.getElementById('ds');
-fetch('/api/dataset/cameras?idx='+sel.value).then(function(r){return r.json()}).then(function(d){
+fetch(appUrl('api/dataset/cameras?idx='+sel.value)).then(function(r){return r.json()}).then(function(d){
 var c=document.getElementById('cam');c.innerHTML='';
 d.cameras.forEach(function(n){var o=document.createElement('option');o.value=n;o.textContent=n;c.appendChild(o);});});}
 function loadDs(){
 var di=document.getElementById('ds').value;
 var cn=document.getElementById('cam').value;
 document.getElementById('ds-status').textContent='Loading...';
-fetch('/api/dataset/load',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/dataset/load'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({dataset_idx:parseInt(di),camera:cn})})
 .then(function(r){return r.json()}).then(function(d){
 if(d.ok){document.getElementById('ds-status').textContent='Loaded '+d.n_frames+' frames';
@@ -254,7 +256,7 @@ if(S.tx===null||S.ty===null){alert('Please select a tracking point');return;}
 if(!S.ma){
 var missing=[];S.ms.forEach(function(m){if(!samPtsMap[m]||samPtsMap[m]===0)missing.push(m);});
 if(missing.length>0){alert('These mask frames are not annotated: '+missing.join(', '));return;}}
-fetch('/api/done',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/done'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({start:S.s,end:S.e,maskRefs:S.ms,
 trackingX:S.tx,trackingY:S.ty,maskAuto:S.ma,
 armIndex:document.getElementById('arm-sel')?parseInt(document.getElementById('arm-sel').value):0,
@@ -291,7 +293,7 @@ b.onclick=function(){pCurOv=i;renderPTabs();
 if(pOverlays[i]){var img=document.getElementById('p-img');img.src=pOverlays[i];img.style.display='';}};
 c.appendChild(b);});}
 function pollPipe(){
-fetch('/api/pipeline/state').then(function(r){return r.json()}).then(function(d){
+fetch(appUrl('api/pipeline/state')).then(function(r){return r.json()}).then(function(d){
 if(!d||!d.stage)return;
 document.getElementById('p-msg').textContent=d.message||'';
 /* Warning display */
@@ -320,7 +322,7 @@ if(d.tracking_video_path&&!document.getElementById('trk-video')){
 var c2=document.getElementById('p-img').parentNode;
 var th=document.createElement('h4');th.style.marginTop='12px';th.textContent='Tracking Video';c2.appendChild(th);
 var v2=document.createElement('video');v2.id='trk-video';
-v2.src='/api/tracking_video';v2.controls=true;v2.loop=true;v2.muted=true;v2.autoplay=true;
+v2.src=appUrl('api/tracking_video');v2.controls=true;v2.loop=true;v2.muted=true;v2.autoplay=true;
 v2.style.maxWidth='100%';v2.style.maxHeight='50vh';v2.style.marginTop='4px';
 v2.setAttribute('playsinline','');c2.appendChild(v2);}
 if(d.stage==='done'){clearInterval(pipeTimer);
@@ -338,20 +340,20 @@ md.innerHTML='<h4 style="margin:8px 0 4px">Intrinsic (K)</h4>'
 +'<h4 style="margin:8px 0 4px">Extrinsic (Coarse)</h4>'
 +'<pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto">'+(d.extrinsic_coarse_str||'N/A')+'</pre>'
 +'<div style="margin-top:8px;font-size:14px">'
-+'<a href="/api/download/intrinsic" download style="margin-right:12px">Download intrinsic.npy</a>'
-+'<a href="/api/download/extrinsic_refined" download style="margin-right:12px">Download extrinsic_refined.npy</a>'
-+'<a href="/api/download/extrinsic_coarse" download>Download extrinsic_coarse.npy</a>'
-+'<br/><a href="/api/download/calibration" download style="margin-top:8px;display:inline-block;font-weight:bold;color:#06f">Download calibration.yaml</a>'
++'<a href="'+appUrl('api/download/intrinsic')+'" download style="margin-right:12px">Download intrinsic.npy</a>'
++'<a href="'+appUrl('api/download/extrinsic_refined')+'" download style="margin-right:12px">Download extrinsic_refined.npy</a>'
++'<a href="'+appUrl('api/download/extrinsic_coarse')+'" download>Download extrinsic_coarse.npy</a>'
++'<br/><a href="'+appUrl('api/download/calibration')+'" download style="margin-top:8px;display:inline-block;font-weight:bold;color:#06f">Download calibration.yaml</a>'
 +'</div>';
 mc.appendChild(md);}
 /* Video */
 if(d.video_path){
 var v=document.createElement('video');
-v.src='/api/video';v.controls=true;v.autoplay=true;v.loop=true;v.muted=true;
+v.src=appUrl('api/video');v.controls=true;v.autoplay=true;v.loop=true;v.muted=true;
 v.style.maxWidth='100%';v.style.maxHeight='50vh';v.style.marginTop='8px';
 v.setAttribute('playsinline','');
 var c=document.getElementById('p-img').parentNode;c.appendChild(v);
-var dl=document.createElement('a');dl.href='/api/video';dl.download='anno_video.mp4';
+var dl=document.createElement('a');dl.href=appUrl('api/video');dl.download='anno_video.mp4';
 dl.textContent='Download Video';dl.style.display='block';dl.style.marginTop='8px';dl.style.fontSize='14px';
 c.appendChild(dl);}
 /* Tracking video (skip if already shown in coarse stage) */
@@ -359,20 +361,20 @@ if(d.tracking_video_path&&!document.getElementById('trk-video')){
 var c2=document.getElementById('p-img').parentNode;
 var th=document.createElement('h4');th.style.marginTop='16px';th.textContent='Tracking Video';c2.appendChild(th);
 var v2=document.createElement('video');v2.id='trk-video';
-v2.src='/api/tracking_video';v2.controls=true;v2.loop=true;v2.muted=true;
+v2.src=appUrl('api/tracking_video');v2.controls=true;v2.loop=true;v2.muted=true;
 v2.style.maxWidth='100%';v2.style.maxHeight='50vh';v2.style.marginTop='4px';
 v2.setAttribute('playsinline','');c2.appendChild(v2);
-var dl2=document.createElement('a');dl2.href='/api/tracking_video';dl2.download='tracking.mp4';
+var dl2=document.createElement('a');dl2.href=appUrl('api/tracking_video');dl2.download='tracking.mp4';
 dl2.textContent='Download Tracking Video';dl2.style.display='block';dl2.style.marginTop='8px';dl2.style.fontSize='14px';
 c2.appendChild(dl2);}}
 }).catch(function(e){console.error('pollPipe error:',e);});}
 function fin(){
-fetch('/api/finish',{method:'POST'}).then(function(){
+fetch(appUrl('api/finish'),{method:'POST'}).then(function(){
 document.body.innerHTML='<p style="text-align:center;margin-top:3rem;font-size:18px">Done</p>';});}
 function autoDetect(){
 document.getElementById('auto-msg').textContent='Detecting...';
 var fi=S.ms[S.curMI];
-fetch('/api/auto_detect',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/auto_detect'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:fi})})
 .then(function(r){return r.json()}).then(function(d){
 if(d.ok){
@@ -383,7 +385,7 @@ samPtsMap[fi]=-1;renderMTabs();
 }).catch(function(){document.getElementById('auto-msg').textContent='Request failed';document.getElementById('auto-msg').style.color='#c00';});}
 function autoTracking(){
 document.getElementById('at-msg').textContent='Recognizing...';
-fetch('/api/auto_tracking',{method:'POST',headers:{'Content-Type':'application/json'},
+fetch(appUrl('api/auto_tracking'),{method:'POST',headers:{'Content-Type':'application/json'},
 body:JSON.stringify({fi:S.ms[S.curMI],target_fi:S.s})})
 .then(function(r){return r.json()}).then(function(d){
 if(d.ok){
@@ -395,15 +397,15 @@ document.getElementById('at-msg').style.color='#090';
 function restart(){
 if(pipeTimer)clearInterval(pipeTimer);
 if(typeof samTimer!=='undefined')clearInterval(samTimer);
-fetch('/api/restart',{method:'POST'})
+fetch(appUrl('api/restart'),{method:'POST'})
 .then(function(){setTimeout(function(){location.reload();},300);})
 .catch(function(){location.reload();});}
 function reconfig(){
-fetch('/api/reconfig',{method:'POST'}).then(function(){
-setTimeout(function(){window.location.href='/';},300);})
-.catch(function(){window.location.href='/';});}
+fetch(appUrl('api/reconfig'),{method:'POST'}).then(function(){
+setTimeout(function(){window.location.href=APP_BASE.toString();},300);})
+.catch(function(){window.location.href=APP_BASE.toString();});}
 function stopRefine(){
-fetch('/api/pipeline/stop',{method:'POST'}).then(function(){
+fetch(appUrl('api/pipeline/stop'),{method:'POST'}).then(function(){
 document.getElementById('stop-btn').disabled=true;
 document.getElementById('stop-btn').textContent='Stopping...';});}
 </script></body></html>
