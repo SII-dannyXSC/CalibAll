@@ -106,3 +106,36 @@ class DualArmSliceProcessor(StateProcessor):
         if self._offset_2 is not None:
             right += self._offset_2
         return np.concatenate([left, right], axis=-1)
+
+
+class UmiEEFProcessor(StateProcessor):
+    """UMI absolute eef pose selector.
+
+    Input is expected to contain one or more UMI eef blocks. Use ``start`` and
+    ``stop`` to select one block. Each block is:
+    ``[x, y, z, r1, r2, r3, r4, r5, r6, gripper]``.
+    """
+
+    def __init__(
+        self,
+        start: Optional[int] = None,
+        stop: Optional[int] = None,
+    ):
+        self._sl = slice(start, stop)
+
+    def __call__(self, columns: dict[str, np.ndarray]) -> np.ndarray:
+        raw = np.concatenate(list(columns.values()), axis=-1).astype(np.float32, copy=True)
+        if raw.ndim != 2:
+            raise ValueError(f"UMI state should be (T, D), got shape={raw.shape}")
+        result = raw[..., self._sl].copy()
+        arm_dim = 10
+        if result.shape[-1] != arm_dim:
+            raise ValueError(
+                f"UMI selected state dim {result.shape[-1]} != expected {arm_dim}"
+            )
+
+        return result
+
+
+# Backward compatible alias for configs created before UMI state was confirmed absolute.
+UmiDeltaEEFProcessor = UmiEEFProcessor
