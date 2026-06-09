@@ -132,12 +132,24 @@ body{font-family:system-ui;max-width:750px;margin:2rem auto;padding:0 1rem}
 <p id="msg"></p>
 
 <script>
+function currentAppBase() {
+  var current = new URL(window.location.href);
+  var normalizedPath = current.pathname.endsWith('/') ? current.pathname : current.pathname + '/';
+  return new URL(normalizedPath, current);
+}
+
+var APP_BASE = currentAppBase();
+
+function appUrl(path) {
+  return new URL(path, APP_BASE).toString();
+}
+
 var currentYamlInfo = null;
 
 function onYamlChange() {
   var filename = document.getElementById('yaml-sel').value;
   if (!filename) return;
-  fetch('/api/config/yaml_info', {
+  fetch(appUrl('api/config/yaml_info'), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({filename: filename})
@@ -195,7 +207,7 @@ function scanPath() {
   if (!tp) { document.getElementById('scan-msg').textContent = 'Please enter a path first'; return; }
   document.getElementById('scan-msg').textContent = 'Scanning...';
   document.getElementById('scan-msg').className = '';
-  fetch('/api/scan', {
+  fetch(appUrl('api/scan'), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({task_path: tp})
@@ -276,7 +288,7 @@ function go() {
     payload.overrides = overrides;
   }
 
-  fetch('/api/config/submit', {
+  fetch(appUrl('api/config/submit'), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(payload)
@@ -292,7 +304,7 @@ function go() {
         '<div id="lb" style="background:#06f;height:100%;border-radius:8px;width:0%;transition:width 0.3s"></div></div>' +
         '<p id="ld" style="font-size:13px;color:#999"></p></div>';
       var lt = setInterval(function() {
-        fetch('/api/loading_status').then(function(r) { return r.json(); }).then(function(s) {
+        fetch(appUrl('api/loading_status')).then(function(r) { return r.json(); }).then(function(s) {
           document.getElementById('ls').textContent = s.message || 'Loading...';
           if (s.progress !== undefined) document.getElementById('lb').style.width = s.progress + '%';
           if (s.detail) document.getElementById('ld').textContent = s.detail;
@@ -300,7 +312,7 @@ function go() {
             clearInterval(lt);
             document.getElementById('ls').textContent = 'Done! Redirecting...';
             document.getElementById('lb').style.width = '100%';
-            setTimeout(function(){ window.location.href = '/annotate'; }, 500);
+            setTimeout(function(){ window.location.href = appUrl('annotate'); }, 500);
           }
         });
       }, 500);
