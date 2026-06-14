@@ -1,0 +1,5 @@
+# UMI handheld gripper URDF smoke-test config.
+robot_type: umi
+
+tf:
+  grasp_point_rotation_align: null

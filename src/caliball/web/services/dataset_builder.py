@@ -24,6 +24,8 @@ class DatasetBuilder:
         "caliball.dataset.state_processors.SliceProcessor",
         "caliball.dataset.state_processors.DualArmSliceProcessor",
         "caliball.dataset.state_processors.StateProcessor",
+        "caliball.dataset.state_processors.UmiEEFProcessor",
+        "caliball.dataset.state_processors.UmiDeltaEEFProcessor",
     }
     _CONFIGURABLE_DATASETS = {
         "caliball.dataset.lerobot_dataset.LeRobotDataset",

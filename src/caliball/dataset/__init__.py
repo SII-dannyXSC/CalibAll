@@ -1,6 +1,17 @@
 """caliball.dataset — Dataset loading for calibration and labeling."""
 
 from caliball.dataset.lerobot_dataset import LeRobotDataset
-from caliball.dataset.state_processors import StateProcessor, SliceProcessor
+from caliball.dataset.state_processors import (
+    StateProcessor,
+    SliceProcessor,
+    UmiDeltaEEFProcessor,
+    UmiEEFProcessor,
+)
 
-__all__ = ["LeRobotDataset", "StateProcessor", "SliceProcessor"]
+__all__ = [
+    "LeRobotDataset",
+    "StateProcessor",
+    "SliceProcessor",
+    "UmiDeltaEEFProcessor",
+    "UmiEEFProcessor",
+]

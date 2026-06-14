@@ -1,0 +1,10 @@
+# UMI LeRobot 2.1: state is eef delta pose, not joint angles.
+name: umi_eef_right
+dual_arm: false
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  state_keys: observation.state
+  state_processor:
+    _target_: caliball.dataset.state_processors.UmiEEFProcessor
+    start: 10
+    stop: 20
