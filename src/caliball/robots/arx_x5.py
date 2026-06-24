@@ -53,6 +53,12 @@ class ArxX5TF(BaseTF):
     FINGER_NAMES = ("link7", "link8")
     GRIPPER_CLOSED = 0.0
     GRIPPER_MAX = 0.088
+    # Midpoint of link7/link8 foremost finger vertices in the closed gripper
+    # state, expressed in link6/flange frame.
+    TCP_IN_LINK6_HOM = np.array(
+        [0.15757000232458115, -2.0003725290299165e-06, 0.000999998375232211, 1.0],
+        dtype=np.float64,
+    )
 
     LINK_NAMES = ARM_NAMES
     TCP_NAME = ARM_TCP_NAME
@@ -108,7 +114,10 @@ class ArxX5TF(BaseTF):
         return self._robot.fkine(self._expand_q(q), end=self.tcp_name).A[np.newaxis]
 
     def _fkine_tcp_raw(self, q: np.ndarray) -> np.ndarray:
-        return self.fkine_flange(q)
+        flange = self.fkine_flange(q)[0]
+        tcp = flange.copy()
+        tcp[:3, 3] = (flange @ self.TCP_IN_LINK6_HOM)[:3]
+        return tcp[np.newaxis]
 
     def fkine_all(self, q: np.ndarray) -> np.ndarray:
         q_full = self._expand_q(q)
