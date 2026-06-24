@@ -1,0 +1,25 @@
+dataset_name: test5_lerobot2_1
+calib_dataset_name: umi
+robot_type: umi
+base_path: /home/xiesicheng/data/umi
+
+dataset:
+  _target_: caliball.dataset.lerobot_dataset.LeRobotDataset
+  repo_id: ${base_path}/${dataset_name}
+  state_keys: observation.state.eef_pose
+  state_processor:
+    _target_: caliball.dataset.state_processors.UmiEEFProcessor
+    start: 0
+    stop: 10
+  decode_video_keys:
+    - observation.image.third_view
+
+tf:
+  grasp_point_rotation_align: null
+
+label:
+  output_dir: ./label_out/umi_test5_left_mask
+  camera_names:
+    - observation.image.third_view
+  max_episodes: 1
+  device: cuda

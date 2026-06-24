@@ -50,6 +50,12 @@ class UmiTF(BaseTF):
     EEF_DIM = 10
     TOP_TO_URDF_BASE_VERTICAL_M = 0.24
     TOP_BRACKET_TILT_DEG = 36.0
+    # Midpoint of the foremost vertices of link1/link2 in the URDF base frame.
+    # Derived from the finger STL meshes at closed gripper state.
+    TCP_IN_URDF_BASE_HOM = np.array(
+        [0.12300963309451449, 0.0, 0.1637802587991628, 1.0],
+        dtype=np.float64,
+    )
 
     _tilt = np.deg2rad(TOP_BRACKET_TILT_DEG)
     _sin_tilt = float(np.sin(_tilt))
@@ -139,7 +145,14 @@ class UmiTF(BaseTF):
         return T[np.newaxis]
 
     def _fkine_tcp_raw(self, q: np.ndarray) -> np.ndarray:
-        return self.fkine_flange(q)
+        eef_block = self._eef_block(q)
+        T_mount = self.RENDER_ALIGN_T.copy()
+        if eef_block is not None:
+            T_mount = self._eef_to_hom(eef_block) @ T_mount
+
+        tcp = T_mount.copy()
+        tcp[:3, 3] = (T_mount @ self.TCP_IN_URDF_BASE_HOM)[:3]
+        return tcp[np.newaxis]
 
     def fkine_all(self, q: np.ndarray) -> np.ndarray:
         eef_block = self._eef_block(q)

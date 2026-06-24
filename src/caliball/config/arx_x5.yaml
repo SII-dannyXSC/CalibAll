@@ -1,0 +1,5 @@
+robot_type: arx_x5
+
+tf:
+  gripper_mount_yaw_deg: 0.0
+
