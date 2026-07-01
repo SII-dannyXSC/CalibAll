@@ -5,9 +5,6 @@
 <a href="https://arxiv.org/abs/2511.17001">
     <img alt="arXiv" src="https://img.shields.io/badge/arXiv-2511.17001-red?logo=arxiv" height="20" />
 </a>
-<a href="https://sii-dannyxsc.github.io/CalibAll/">
-    <img alt="Project Page" src="https://img.shields.io/badge/Project-Page-A9B5DF" height="20" />
-</a>
 <a href="LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-green.svg" height="20" />
 </a>
